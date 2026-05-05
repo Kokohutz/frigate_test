@@ -77,6 +77,9 @@ where
     info!("detection-bridge: binding REP socket to {socket_addr}");
     let ctx = zmq::Context::new();
     let socket = ctx.socket(zmq::REP)?;
+    // linger(0): drop unsent messages immediately on close so SIGTERM does not
+    // stall in zmq_ctx_destroy waiting up to 30 s for the peer to connect.
+    socket.set_linger(0)?;
     socket.bind(socket_addr)?;
     info!("detection-bridge: REP socket bound, ready for requests");
 

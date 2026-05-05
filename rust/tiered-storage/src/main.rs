@@ -61,13 +61,33 @@ async fn main() -> Result<()> {
                 }
             }
 
-            // 4. Graceful shutdown on Ctrl-C.
-            _ = tokio::signal::ctrl_c() => {
-                info!("received Ctrl-C, shutting down");
+            // 4. Graceful shutdown on SIGINT or SIGTERM (docker stop).
+            _ = shutdown_signal() => {
+                info!("shutdown signal received, exiting");
                 break;
             }
         }
     }
 
     Ok(())
+}
+
+/// Wait for SIGINT (Ctrl-C) or SIGTERM (docker stop).
+/// Docker sends SIGTERM to the main process on `docker stop`, so handling it
+/// allows the daemon to flush and exit cleanly within the grace period.
+async fn shutdown_signal() {
+    let ctrl_c = async { tokio::signal::ctrl_c().await.ok() };
+
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("SIGTERM handler");
+        tokio::select! {
+            _ = ctrl_c => {}
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    ctrl_c.await;
 }

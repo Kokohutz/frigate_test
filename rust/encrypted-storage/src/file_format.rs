@@ -80,10 +80,12 @@ pub fn decrypt_file(
     }
 
     // Check version
+    // SAFETY: the length guard above guarantees data.len() >= CIPHERTEXT_OFFSET (53),
+    // so the 4-byte slice is always exactly VERSION_LEN bytes — try_into() cannot fail.
     let version = u32::from_le_bytes(
         data[VERSION_OFFSET..VERSION_OFFSET + VERSION_LEN]
             .try_into()
-            .unwrap(),
+            .expect("slice is exactly 4 bytes; this is guaranteed by the length check above"),
     );
     if version != VERSION {
         bail!(

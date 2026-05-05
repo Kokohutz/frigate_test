@@ -7,6 +7,7 @@ members = [
     "tiered-storage",
     "detection-bridge",
     "event-router",
+    "comms-dispatcher",
 ]
 
 [workspace.dependencies]

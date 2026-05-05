@@ -26,8 +26,12 @@ chacha20poly1305 = "0.10"
 argon2 = "0.5"
 # Random nonce generation
 rand = { workspace = true }
+# SHA-256 for key_id
+sha2 = "0.10"
 
 # HTTP server for range-request decrypt-on-read
+axum = { version = "0.7", features = ["tokio"] }
+tower = "0.4"
 hyper = { version = "1", features = ["full"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"

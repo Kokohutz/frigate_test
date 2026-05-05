@@ -128,12 +128,43 @@ async fn main() -> Result<()> {
     // ── Main event loop ───────────────────────────────────────────────────────
 
     info!("event-router ready");
-    while let Some(event) = rx.recv().await {
-        router.route(&event).await;
+    loop {
+        tokio::select! {
+            event = rx.recv() => {
+                match event {
+                    Some(e) => router.route(&e).await,
+                    None => break, // ZMQ subscriber thread exited
+                }
+            }
+            _ = shutdown_signal() => {
+                info!("shutdown signal received, exiting");
+                break;
+            }
+        }
     }
 
     info!("event-router shutting down");
     Ok(())
+}
+
+/// Wait for SIGINT (Ctrl-C) or SIGTERM (docker stop).
+/// Docker sends SIGTERM to the container process on `docker stop`, so handling
+/// it allows the daemon to flush and exit cleanly within the grace period.
+async fn shutdown_signal() {
+    let ctrl_c = async { tokio::signal::ctrl_c().await.ok() };
+
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("SIGTERM handler");
+        tokio::select! {
+            _ = ctrl_c => {}
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    ctrl_c.await;
 }
 
 /// Current UNIX timestamp as f64.

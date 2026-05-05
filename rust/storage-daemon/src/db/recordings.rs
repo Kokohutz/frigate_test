@@ -130,7 +130,10 @@ pub async fn fetch_orphan_recordings(
         }
         let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
 
-        let mut stmt = c.prepare_cached(&sql)?;
+        // Use prepare() not prepare_cached(): the SQL is dynamic (variable number of
+        // camera placeholders), so caching by SQL text would return a stale statement
+        // with a mismatched parameter count on subsequent calls with a different camera list.
+        let mut stmt = c.prepare(&sql)?;
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| {
                 Ok(RecordingRow {

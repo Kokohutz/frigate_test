@@ -460,10 +460,20 @@ class FrigateApp:
         self.event_cleanup.start()
 
     def start_record_cleanup(self) -> None:
+        import os
+
+        if os.environ.get("FRIGATE_RUST_CLEANUP", "0") == "1":
+            logger.info("FRIGATE_RUST_CLEANUP=1: skipping Python RecordingCleanup (Rust owns this)")
+            return
         self.record_cleanup = RecordingCleanup(self.config, self.stop_event)
         self.record_cleanup.start()
 
     def start_storage_maintainer(self) -> None:
+        import os
+
+        if os.environ.get("FRIGATE_RUST_CLEANUP", "0") == "1":
+            logger.info("FRIGATE_RUST_CLEANUP=1: skipping Python StorageMaintainer (Rust owns this)")
+            return
         self.storage_maintainer = StorageMaintainer(self.config, self.stop_event)
         self.storage_maintainer.start()
 

@@ -21,6 +21,12 @@ pub struct Config {
     pub ffmpeg_path: PathBuf,
     /// When true, shadow mode: log decisions but do not move files or write DB
     pub shadow_mode: bool,
+    /// When true (FRIGATE_RUST_CLEANUP=1), Rust owns cleanup; Python threads are suppressed.
+    pub cleanup_enabled: bool,
+    /// Days to keep all recordings regardless of motion (FRIGATE_CONTINUOUS_RETAIN_DAYS).
+    pub continuous_retain_days: f64,
+    /// Days to keep recordings with motion or audio (FRIGATE_MOTION_RETAIN_DAYS).
+    pub motion_retain_days: f64,
     /// Per-camera retain mode override (populated from Frigate YAML in Phase C)
     #[allow(dead_code)]
     pub cameras: Vec<CameraConfig>,
@@ -50,6 +56,20 @@ impl Config {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(true); // default: shadow mode for safety
 
+        let cleanup_enabled = std::env::var("FRIGATE_RUST_CLEANUP")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let continuous_retain_days = std::env::var("FRIGATE_CONTINUOUS_RETAIN_DAYS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30.0);
+
+        let motion_retain_days = std::env::var("FRIGATE_MOTION_RETAIN_DAYS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10.0);
+
         Self {
             cache_dir: std::env::var("FRIGATE_CACHE_DIR")
                 .map(PathBuf::from)
@@ -64,6 +84,9 @@ impl Config {
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from(DEFAULT_FFMPEG_PATH)),
             shadow_mode,
+            cleanup_enabled,
+            continuous_retain_days,
+            motion_retain_days,
             cameras: vec![],
         }
     }

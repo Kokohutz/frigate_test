@@ -6,6 +6,13 @@ mod maintainer;
 mod storage;
 mod zmq;
 
+use cleanup::{
+    retention::{expire_recordings, RetentionConfig},
+    wal::check_and_truncate_wal_or_warn,
+};
+use db::recordings::open as open_db;
+use storage::pressure::{check_and_relieve_pressure, PressureState};
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -142,6 +149,69 @@ async fn main() -> Result<()> {
             sleep(wait).await;
         }
     });
+
+    // Task 3 & 4: cleanup + storage pressure (only when FRIGATE_RUST_CLEANUP=1)
+    if config_arc.cleanup_enabled {
+        info!(
+            continuous_retain_days = config_arc.continuous_retain_days,
+            motion_retain_days = config_arc.motion_retain_days,
+            "Cleanup enabled — Rust owns WAL truncation, retention, and disk pressure"
+        );
+
+        let cfg = Arc::clone(&config_arc);
+        tokio::spawn(async move {
+            let conn = match open_db(&cfg.db_path).await {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("Cleanup: failed to open DB: {e}");
+                    return;
+                }
+            };
+            let retention_cfg = RetentionConfig {
+                continuous_retain_days: cfg.continuous_retain_days,
+                motion_retain_days: cfg.motion_retain_days,
+            };
+            // Cameras list is empty in Phase B; cleanup still runs for all cameras it finds.
+            let cameras: Vec<String> = cfg.cameras.iter().map(|c| c.name.clone()).collect();
+
+            let mut wal_counter = 0u64;
+            loop {
+                // WAL check every loop iteration (60s)
+                check_and_truncate_wal_or_warn(&cfg.db_path).await;
+
+                // Retention sweep hourly (every 60 iterations × 60s)
+                wal_counter += 1;
+                if wal_counter % 60 == 0 {
+                    if let Err(e) = expire_recordings(&conn, &cameras, &retention_cfg).await {
+                        warn!("Retention sweep failed: {e}");
+                    }
+                }
+
+                sleep(Duration::from_secs(60)).await;
+            }
+        });
+
+        let cfg = Arc::clone(&config_arc);
+        tokio::spawn(async move {
+            let conn = match open_db(&cfg.db_path).await {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("Storage pressure: failed to open DB: {e}");
+                    return;
+                }
+            };
+            let cameras: Vec<String> = cfg.cameras.iter().map(|c| c.name.clone()).collect();
+            let mut state = PressureState::new();
+            loop {
+                if let Err(e) =
+                    check_and_relieve_pressure(&conn, &cfg.record_dir, &mut state, &cameras).await
+                {
+                    warn!("Storage pressure check failed: {e}");
+                }
+                sleep(Duration::from_secs(300)).await;
+            }
+        });
+    }
 
     // Keep main alive until Ctrl-C
     tokio::signal::ctrl_c().await?;

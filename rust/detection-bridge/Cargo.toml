@@ -9,6 +9,11 @@ description = "Multi-model ONNX inference chain for Frigate, implementing the Zm
 name = "detection-bridge"
 path = "src/main.rs"
 
+[features]
+# Enable when ONNX Runtime is installed (set ORT_LIB_LOCATION in Docker build).
+# Disabled by default so the workspace builds without ORT being present.
+with-onnx = ["ort", "ndarray"]
+
 [dependencies]
 frigate-common = { path = "../common" }
 tokio = { workspace = true }
@@ -24,6 +29,6 @@ dashmap = { workspace = true }
 tmq = "0.4"
 zmq = "0.10"
 
-# ONNX Runtime bindings — use download-binaries for Docker cross-arch builds
-ort = { version = "2", features = ["download-binaries"] }
-ndarray = "0.15"
+# Enabled only when with-onnx feature is active (requires ORT_LIB_LOCATION)
+ort = { version = "2.0.0-rc.12", optional = true }
+ndarray = { version = "0.15", optional = true }

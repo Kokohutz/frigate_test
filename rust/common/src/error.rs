@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum FrigateError {
     #[error("ZMQ error: {0}")]
-    Zmq(#[from] zmq::Error),
+    Zmq(String),
 
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),

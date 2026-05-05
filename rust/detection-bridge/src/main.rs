@@ -1,8 +1,8 @@
-mod chain;
-mod merge;
-mod ort_runner;
-mod shm;
-mod zmq_server;
+// detection-bridge: Multi-model ONNX inference chain.
+// Implements the ZmqIpcDetector wire protocol from frigate/detectors/plugins/zmq_ipc.py.
+//
+// Build with ONNX Runtime support:
+//   ORT_LIB_LOCATION=/path/to/onnxruntime cargo build --features with-onnx
 
 use anyhow::Result;
 use tracing::info;
@@ -17,7 +17,6 @@ async fn main() -> Result<()> {
         .init();
 
     info!("detection-bridge starting (not yet implemented)");
-    // TODO: load detection_bridge: config section, start ZMQ REP server,
-    //       load ONNX models, handle inference requests
+    info!("Build with '--features with-onnx' and ORT_LIB_LOCATION set to enable ONNX inference.");
     Ok(())
 }

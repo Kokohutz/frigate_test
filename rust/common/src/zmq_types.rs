@@ -142,7 +142,10 @@ mod tests {
     fn test_parse_cache_filename() {
         let (cam, dt) = parse_cache_filename("front_door@20250505120000+0000.mp4").unwrap();
         assert_eq!(cam, "front_door");
-        assert_eq!(dt.format("%Y-%m-%d %H:%M:%S").to_string(), "2025-05-05 12:00:00");
+        assert_eq!(
+            dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+            "2025-05-05 12:00:00"
+        );
     }
 
     #[test]

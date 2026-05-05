@@ -22,14 +22,14 @@ pub fn compute_motion_heatmap(
     let fh = frame_height as f32;
 
     for &[x1, y1, x2, y2] in motion_boxes {
-        // Clamp to frame bounds
-        let x1 = (x1.max(0) as f32 / fw * 16.0).floor() as usize;
-        let y1 = (y1.max(0) as f32 / fh * 16.0).floor() as usize;
-        let x2 = ((x2 as f32 / fw * 16.0).ceil() as usize).min(16);
-        let y2 = ((y2 as f32 / fh * 16.0).ceil() as usize).min(16);
+        let col_start = (x1.max(0) as f32 / fw * 16.0).floor() as usize;
+        let row_start = (y1.max(0) as f32 / fh * 16.0).floor() as usize;
+        let col_end = ((x2 as f32 / fw * 16.0).ceil() as usize).min(16);
+        let row_end = ((y2 as f32 / fh * 16.0).ceil() as usize).min(16);
 
-        for row in y1..y2 {
-            for col in x1..x2 {
+        #[allow(clippy::needless_range_loop)]
+        for row in row_start..row_end {
+            for col in col_start..col_end {
                 grid[row][col] = grid[row][col].saturating_add(1);
             }
         }
@@ -37,6 +37,7 @@ pub fn compute_motion_heatmap(
 
     // Emit sparse map — only non-zero cells
     let mut result = HashMap::new();
+    #[allow(clippy::needless_range_loop)]
     for row in 0..16usize {
         for col in 0..16usize {
             let count = grid[row][col];

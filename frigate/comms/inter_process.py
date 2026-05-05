@@ -2,6 +2,7 @@
 
 import logging
 import multiprocessing as mp
+import os
 import threading
 from multiprocessing.synchronize import Event as MpEvent
 from typing import Any, Callable
@@ -13,13 +14,22 @@ from frigate.comms.base_communicator import Communicator
 logger = logging.getLogger(__name__)
 
 SOCKET_REP_REQ = "ipc:///tmp/cache/comms"
+# When the Rust comms-dispatcher owns the primary address Python uses this fallback.
+SOCKET_REP_REQ_PY = "ipc:///tmp/cache/comms_py"
 
 
 class InterProcessCommunicator(Communicator):
     def __init__(self) -> None:
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
-        self.socket.bind(SOCKET_REP_REQ)
+        # The Rust comms-dispatcher binds SOCKET_REP_REQ and forwards unhandled
+        # topics here when FRIGATE_RUST_DISPATCHER=1.
+        addr = (
+            SOCKET_REP_REQ_PY
+            if os.environ.get("FRIGATE_RUST_DISPATCHER") == "1"
+            else SOCKET_REP_REQ
+        )
+        self.socket.bind(addr)
         self.stop_event: MpEvent = mp.Event()
 
     def publish(self, topic: str, payload: Any, retain: bool = False) -> None:

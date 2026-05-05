@@ -227,11 +227,12 @@ COPY rust/encrypted-storage/Cargo.toml /build/rust/encrypted-storage/
 COPY rust/tiered-storage/Cargo.toml /build/rust/tiered-storage/
 COPY rust/detection-bridge/Cargo.toml /build/rust/detection-bridge/
 COPY rust/event-router/Cargo.toml /build/rust/event-router/
+COPY rust/comms-dispatcher/Cargo.toml /build/rust/comms-dispatcher/
 
 # Create stub sources so Cargo can resolve and pre-compile all dependencies
 RUN mkdir -p /build/rust/common/src \
     && echo "pub fn stub() {}" > /build/rust/common/src/lib.rs \
-    && for crate in storage-daemon encrypted-storage tiered-storage detection-bridge event-router; do \
+    && for crate in storage-daemon encrypted-storage tiered-storage detection-bridge event-router comms-dispatcher; do \
        mkdir -p /build/rust/$crate/src \
        && echo "fn main() {}" > /build/rust/$crate/src/main.rs; \
     done
@@ -252,7 +253,8 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
     && install -m 755 target/release/encrypted-storage /usr/local/bin/encrypted-storage \
     && install -m 755 target/release/tiered-storage /usr/local/bin/tiered-storage \
     && install -m 755 target/release/detection-bridge /usr/local/bin/detection-bridge \
-    && install -m 755 target/release/event-router /usr/local/bin/event-router
+    && install -m 755 target/release/event-router /usr/local/bin/event-router \
+    && install -m 755 target/release/comms-dispatcher /usr/local/bin/comms-dispatcher
 
 # Collect deps in a single layer
 FROM scratch AS deps-rootfs
@@ -271,6 +273,7 @@ COPY --from=rust-builder /usr/local/bin/encrypted-storage /usr/local/bin/
 COPY --from=rust-builder /usr/local/bin/tiered-storage /usr/local/bin/
 COPY --from=rust-builder /usr/local/bin/detection-bridge /usr/local/bin/
 COPY --from=rust-builder /usr/local/bin/event-router /usr/local/bin/
+COPY --from=rust-builder /usr/local/bin/comms-dispatcher /usr/local/bin/
 
 
 # Frigate deps (ffmpeg, python, nginx, go2rtc, s6-overlay, etc)

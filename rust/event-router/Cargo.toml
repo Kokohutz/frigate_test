@@ -21,8 +21,10 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 
-tmq = "0.4"
 zmq = "0.10"
+
+# Async trait support
+async-trait = "0.1"
 
 # MQTT client
 rumqttc = "0.24"
@@ -32,7 +34,11 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 
 # Rate limiting
 governor = "0.6"
+nonzero_ext = "0.3"
 
 # Dead-letter queue persistence
 rusqlite = { version = "0.31", features = ["bundled"] }
 tokio-rusqlite = "0.5"
+
+[dev-dependencies]
+tempfile = "3"

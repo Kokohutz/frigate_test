@@ -18,17 +18,19 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use dashmap::DashMap;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use config::Config;
-use frigate_common::zmq_types::RetainMode;
+use frigate_common::zmq_types::{RecordingInsert, RetainMode};
 use maintainer::{
-    compute_segment_info, prune_old_frames, record_audio_frame, record_video_frame, scan_cache,
-    validate_segment, CameraAudioFrames, CameraVideoFrames,
+    compute_segment_info, move_segment, prune_old_frames, record_audio_frame, record_video_frame,
+    scan_cache, segment_size_mb, validate_segment, CameraAudioFrames, CameraVideoFrames,
 };
-use zmq::{spawn_detection_subscriber, DetectionEvent};
+use zmq::{spawn_detection_subscriber, DetectionEvent, IpcClient};
 
 /// Retention mode to use when no camera-specific config is available.
 /// In shadow mode this doesn't affect files — it only affects logged decisions.
@@ -112,11 +114,29 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Task 2: periodic cache scan + segment validation (shadow mode: log only)
+    // Task 2: periodic cache scan + segment validation
+    // In active mode: move segments and insert into DB via ZMQ IPC.
+    // In shadow mode: log only.
     let config_arc = Arc::new(config);
     let vf = Arc::clone(&video_frames);
     let af = Arc::clone(&audio_frames);
     let cfg = Arc::clone(&config_arc);
+
+    // Create IpcClient once if in active mode (blocking ZMQ, lives in spawn_blocking)
+    let ipc_client: Option<Arc<std::sync::Mutex<IpcClient>>> = if !cfg.shadow_mode {
+        match IpcClient::new() {
+            Ok(client) => {
+                info!("IpcClient connected to ZMQ REP/REQ socket");
+                Some(Arc::new(std::sync::Mutex::new(client)))
+            }
+            Err(e) => {
+                error!("Failed to create IpcClient: {e} — will proceed without DB inserts");
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     tokio::spawn(async move {
         // Track which segments we've already processed (by path string)
@@ -125,7 +145,7 @@ async fn main() -> Result<()> {
         loop {
             let cycle_start = Instant::now();
 
-            match run_scan_cycle(&cfg, &vf, &af, &processed).await {
+            match run_scan_cycle(&cfg, &vf, &af, &processed, &ipc_client).await {
                 Ok(count) => {
                     if count > 0 {
                         info!("Scan cycle: processed {count} segments");
@@ -219,13 +239,53 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Generate a random 6-character alphanumeric ID suffix.
+fn random_id_suffix() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(6)
+        .map(char::from)
+        .collect()
+}
+
+/// Build a `RecordingInsert` from segment metadata and the permanent path.
+fn build_recording_insert(
+    camera: &str,
+    perm_path: &std::path::Path,
+    start_time: chrono::DateTime<chrono::Utc>,
+    end_time: chrono::DateTime<chrono::Utc>,
+    seg_info: &frigate_common::zmq_types::SegmentInfo,
+    size_mb: f64,
+) -> RecordingInsert {
+    let start_ts =
+        start_time.timestamp() as f64 + start_time.timestamp_subsec_millis() as f64 / 1000.0;
+    let end_ts = end_time.timestamp() as f64 + end_time.timestamp_subsec_millis() as f64 / 1000.0;
+
+    RecordingInsert {
+        id: format!("{}-{}", start_time.timestamp(), random_id_suffix()),
+        camera: camera.to_string(),
+        path: perm_path.to_string_lossy().into_owned(),
+        start_time: start_ts,
+        end_time: end_ts,
+        duration: end_ts - start_ts,
+        motion: seg_info.motion_count,
+        objects: seg_info.active_object_count,
+        regions: seg_info.region_count,
+        db_fs: seg_info.average_db_fs,
+        segment_size: size_mb,
+        motion_heatmap: seg_info.motion_heatmap.clone(),
+    }
+}
+
 /// One iteration of the cache scan loop.
 /// Scans /tmp/cache/, validates each new segment, logs the retention decision.
+/// In active mode (shadow_mode = false): moves files and inserts into DB.
 async fn run_scan_cycle(
     config: &Config,
     video_frames: &CameraVideoFrames,
     audio_frames: &CameraAudioFrames,
     processed: &DashMap<String, bool>,
+    ipc_client: &Option<Arc<std::sync::Mutex<IpcClient>>>,
 ) -> Result<usize> {
     let segments = scan_cache(&config.cache_dir)?;
     let mut count = 0;
@@ -268,9 +328,15 @@ async fn run_scan_cycle(
                     path = %seg.path.display(),
                     duration = validation.duration_secs,
                     has_video = validation.has_video,
-                    "SHADOW: segment invalid — would discard"
+                    "segment invalid — discarding"
                 );
                 processed.insert(path_str, false);
+                // In active mode, delete the invalid cache file
+                if !config.shadow_mode {
+                    if let Err(e) = tokio::fs::remove_file(&seg.path).await {
+                        warn!(path = %seg.path.display(), "failed to delete invalid segment: {e}");
+                    }
+                }
                 count += 1;
                 continue;
             }
@@ -300,12 +366,78 @@ async fn run_scan_cycle(
                 db_fs = seg_info.average_db_fs,
                 retain_mode = ?DEFAULT_RETAIN_MODE,
                 decision = if should_discard { "DISCARD" } else { "KEEP" },
-                "SHADOW: segment decision"
+                shadow = config.shadow_mode,
+                "segment decision"
             );
 
             if config.shadow_mode {
                 // Shadow mode: log only, do not move or delete
                 processed.insert(path_str, !should_discard);
+            } else if should_discard {
+                // Active mode: discard — delete the cache file
+                if let Err(e) = tokio::fs::remove_file(&seg.path).await {
+                    warn!(path = %seg.path.display(), "failed to delete discarded segment: {e}");
+                }
+                processed.insert(path_str, false);
+            } else {
+                // Active mode: keep — move to permanent storage and insert into DB
+                match move_segment(
+                    &seg.path,
+                    &seg.camera,
+                    seg.start_time,
+                    &config.record_dir,
+                    &config.ffmpeg_path,
+                )
+                .await
+                {
+                    Ok(perm_path) => {
+                        let size_mb = segment_size_mb(&perm_path).await;
+                        let insert = build_recording_insert(
+                            &seg.camera,
+                            &perm_path,
+                            seg.start_time,
+                            end_time,
+                            &seg_info,
+                            size_mb,
+                        );
+
+                        // Insert into DB via ZMQ IPC (blocking call — use spawn_blocking)
+                        if let Some(client_arc) = ipc_client {
+                            let client = Arc::clone(client_arc);
+                            let insert_clone = insert.clone();
+                            if let Err(e) = tokio::task::spawn_blocking(move || {
+                                client
+                                    .lock()
+                                    .expect("IpcClient mutex poisoned")
+                                    .insert_recordings(&[insert_clone])
+                            })
+                            .await
+                            {
+                                error!(
+                                    path = %perm_path.display(),
+                                    "DB insert failed: {e} — segment moved but not recorded in DB"
+                                );
+                            } else {
+                                info!(
+                                    path = %perm_path.display(),
+                                    camera = %seg.camera,
+                                    size_mb = %format!("{size_mb:.2}"),
+                                    "segment inserted into DB"
+                                );
+                            }
+                        }
+
+                        processed.insert(path_str, true);
+                    }
+                    Err(e) => {
+                        error!(
+                            path = %seg.path.display(),
+                            "failed to move segment: {e} — skipping"
+                        );
+                        // Mark as processed to avoid retrying a broken segment indefinitely
+                        processed.insert(path_str, false);
+                    }
+                }
             }
 
             count += 1;

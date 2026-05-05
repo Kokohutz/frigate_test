@@ -232,6 +232,11 @@ class FrigateApp:
                 self.processes["go2rtc"] = proc.info["pid"]
 
     def init_recording_manager(self) -> None:
+        if os.environ.get("FRIGATE_RUST_RECORD", "0") == "1":
+            logger.info(
+                "FRIGATE_RUST_RECORD=1: skipping Python RecordProcess (Rust owns recording)"
+            )
+            return
         recording_process = RecordProcess(self.config, self.stop_event)
         self.recording_process = recording_process
         recording_process.start()

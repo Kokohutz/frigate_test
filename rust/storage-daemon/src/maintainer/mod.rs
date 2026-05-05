@@ -3,6 +3,7 @@ pub mod scanner;
 pub mod segment;
 pub mod validator;
 
+pub use mover::{move_segment, segment_size_mb};
 pub use scanner::scan_cache;
 pub use segment::{
     compute_segment_info, prune_old_frames, record_audio_frame, record_video_frame,

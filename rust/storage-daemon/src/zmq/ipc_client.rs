@@ -5,7 +5,6 @@ use frigate_common::zmq_types::{RecordingInsert, SOCKET_REP_REQ, TOPIC_INSERT_MA
 
 /// REQ socket client for ipc:///tmp/cache/comms.
 /// Used in Phase C (full recording maintainer cutover).
-#[allow(dead_code)]
 ///
 /// Wire protocol (inter_process.py):
 ///   send: socket.send_json(["topic_name", data])   — JSON 2-tuple
@@ -18,7 +17,6 @@ pub struct IpcClient {
     socket: zmq::Socket,
 }
 
-#[allow(dead_code)]
 impl IpcClient {
     pub fn new() -> Result<Self> {
         let ctx = zmq::Context::new();

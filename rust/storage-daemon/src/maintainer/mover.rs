@@ -27,18 +27,18 @@ pub async fn move_segment(
             .with_context(|| format!("create_dir_all: {}", parent.display()))?;
     }
 
-    // Remux with faststart via ffmpeg
+    // Remux with faststart via ffmpeg.
+    // Validate UTF-8 explicitly so we get a clear error rather than silently
+    // passing an empty string to ffmpeg if either path is non-UTF-8.
+    let cache_str = cache_path
+        .to_str()
+        .with_context(|| format!("cache path is not valid UTF-8: {}", cache_path.display()))?;
+    let perm_str = perm_path
+        .to_str()
+        .with_context(|| format!("permanent path is not valid UTF-8: {}", perm_path.display()))?;
+
     let output = tokio::process::Command::new(ffmpeg_path)
-        .args([
-            "-y",
-            "-i",
-            cache_path.to_str().unwrap_or_default(),
-            "-c",
-            "copy",
-            "-movflags",
-            "+faststart",
-            perm_path.to_str().unwrap_or_default(),
-        ])
+        .args(["-y", "-i", cache_str, "-c", "copy", "-movflags", "+faststart", perm_str])
         .output()
         .await
         .with_context(|| format!("ffmpeg spawn failed for {}", cache_path.display()))?;

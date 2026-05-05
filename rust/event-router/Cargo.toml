@@ -1,0 +1,38 @@
+[package]
+name = "event-router"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Routes Frigate ZMQ events to MQTT, webhooks, Discord, Telegram, and Slack"
+
+[[bin]]
+name = "event-router"
+path = "src/main.rs"
+
+[dependencies]
+frigate-common = { path = "../common" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+tmq = "0.4"
+zmq = "0.10"
+
+# MQTT client
+rumqttc = "0.24"
+
+# HTTP for webhooks / Discord / Telegram / Slack
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Rate limiting
+governor = "0.6"
+
+# Dead-letter queue persistence
+rusqlite = { version = "0.31", features = ["bundled"] }
+tokio-rusqlite = "0.5"

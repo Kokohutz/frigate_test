@@ -1,0 +1,29 @@
+[package]
+name = "detection-bridge"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Multi-model ONNX inference chain for Frigate, implementing the ZmqIpcDetector wire protocol"
+
+[[bin]]
+name = "detection-bridge"
+path = "src/main.rs"
+
+[dependencies]
+frigate-common = { path = "../common" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+dashmap = { workspace = true }
+
+tmq = "0.4"
+zmq = "0.10"
+
+# ONNX Runtime bindings — use download-binaries for Docker cross-arch builds
+ort = { version = "2", features = ["download-binaries"] }
+ndarray = "0.15"

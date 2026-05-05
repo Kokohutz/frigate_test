@@ -1,0 +1,135 @@
+name: Rust CI
+
+on:
+  push:
+    branches:
+      - dev
+      - master
+      - "claude/*"
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust_ci.yml"
+  pull_request:
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust_ci.yml"
+
+env:
+  RUST_VERSION: "1.82"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust_checks:
+    name: Format + Clippy + Test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libzmq3-dev pkg-config
+
+      - name: Check formatting
+        working-directory: rust
+        run: cargo fmt --all --check
+
+      - name: Clippy (zero warnings)
+        working-directory: rust
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Build (debug)
+        working-directory: rust
+        run: cargo build --all
+
+      - name: Test
+        working-directory: rust
+        run: cargo test --all
+
+  rust_amd64_release:
+    name: Release build (amd64)
+    runs-on: ubuntu-22.04
+    needs: rust_checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libzmq3-dev pkg-config
+
+      - name: Build release binaries
+        working-directory: rust
+        run: cargo build --release --all
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-binaries-amd64
+          path: |
+            rust/target/release/storage-daemon
+            rust/target/release/encrypted-storage
+            rust/target/release/tiered-storage
+            rust/target/release/detection-bridge
+            rust/target/release/event-router
+
+  rust_arm64_release:
+    name: Release build (arm64)
+    runs-on: ubuntu-22.04-arm
+    needs: rust_checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ env.RUST_VERSION }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libzmq3-dev pkg-config
+
+      - name: Build release binaries
+        working-directory: rust
+        run: cargo build --release --all
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-binaries-arm64
+          path: |
+            rust/target/release/storage-daemon
+            rust/target/release/encrypted-storage
+            rust/target/release/tiered-storage
+            rust/target/release/detection-bridge
+            rust/target/release/event-router

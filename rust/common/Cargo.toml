@@ -1,0 +1,14 @@
+[package]
+name = "frigate-common"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Shared types and utilities for Frigate Rust microservices"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }

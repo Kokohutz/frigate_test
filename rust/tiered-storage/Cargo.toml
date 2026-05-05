@@ -1,0 +1,27 @@
+[package]
+name = "tiered-storage"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Hot/cold storage tier management daemon for Frigate recordings"
+
+[[bin]]
+name = "tiered-storage"
+path = "src/main.rs"
+
+[dependencies]
+frigate-common = { path = "../common" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+rusqlite = { version = "0.31", features = ["bundled"] }
+tokio-rusqlite = "0.5"
+sysinfo = "0.30"
+notify = "6"

@@ -204,6 +204,56 @@ RUN pip3 wheel --wheel-dir=/wheels -r /requirements-wheels.txt && \
 RUN --mount=type=bind,source=docker/main/install_hailort.sh,target=/deps/install_hailort.sh \
     /deps/install_hailort.sh
 
+# Build Rust microservices
+# Two-phase build: compile deps first (cacheable), then real sources.
+FROM base AS rust-builder
+ARG DEBIAN_FRONTEND
+ARG RUST_VERSION=1.82.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl build-essential pkg-config libssl-dev libzmq3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust via rustup (non-interactive)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain ${RUST_VERSION} --profile minimal
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Phase 1: cache dependency compilation using stub sources
+COPY rust/Cargo.toml rust/Cargo.lock /build/rust/
+COPY rust/common/Cargo.toml /build/rust/common/
+COPY rust/storage-daemon/Cargo.toml /build/rust/storage-daemon/
+COPY rust/encrypted-storage/Cargo.toml /build/rust/encrypted-storage/
+COPY rust/tiered-storage/Cargo.toml /build/rust/tiered-storage/
+COPY rust/detection-bridge/Cargo.toml /build/rust/detection-bridge/
+COPY rust/event-router/Cargo.toml /build/rust/event-router/
+
+# Create stub sources so Cargo can resolve and pre-compile all dependencies
+RUN mkdir -p /build/rust/common/src \
+    && echo "pub fn stub() {}" > /build/rust/common/src/lib.rs \
+    && for crate in storage-daemon encrypted-storage tiered-storage detection-bridge event-router; do \
+       mkdir -p /build/rust/$crate/src \
+       && echo "fn main() {}" > /build/rust/$crate/src/main.rs; \
+    done
+
+WORKDIR /build/rust
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/build/rust/target \
+    cargo build --release --all 2>&1 | tail -5
+
+# Phase 2: copy real sources and rebuild (only changed crates recompile)
+COPY rust/ /build/rust/
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    --mount=type=cache,target=/build/rust/target \
+    cargo build --release --all \
+    && install -m 755 target/release/storage-daemon /usr/local/bin/storage-daemon \
+    && install -m 755 target/release/encrypted-storage /usr/local/bin/encrypted-storage \
+    && install -m 755 target/release/tiered-storage /usr/local/bin/tiered-storage \
+    && install -m 755 target/release/detection-bridge /usr/local/bin/detection-bridge \
+    && install -m 755 target/release/event-router /usr/local/bin/event-router
+
 # Collect deps in a single layer
 FROM scratch AS deps-rootfs
 COPY --from=nginx /usr/local/nginx/ /usr/local/nginx/
@@ -216,6 +266,11 @@ COPY --from=s6-overlay /rootfs/ /
 COPY --from=models /rootfs/ /
 COPY --from=wheels /rootfs/ /
 COPY docker/main/rootfs/ /
+COPY --from=rust-builder /usr/local/bin/storage-daemon /usr/local/bin/
+COPY --from=rust-builder /usr/local/bin/encrypted-storage /usr/local/bin/
+COPY --from=rust-builder /usr/local/bin/tiered-storage /usr/local/bin/
+COPY --from=rust-builder /usr/local/bin/detection-bridge /usr/local/bin/
+COPY --from=rust-builder /usr/local/bin/event-router /usr/local/bin/
 
 
 # Frigate deps (ffmpeg, python, nginx, go2rtc, s6-overlay, etc)

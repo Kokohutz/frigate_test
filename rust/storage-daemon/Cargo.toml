@@ -1,0 +1,41 @@
+[package]
+name = "storage-daemon"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Rust replacement for Frigate's RecordingMaintainer, RecordingCleanup, and StorageMaintainer"
+
+[[bin]]
+name = "storage-daemon"
+path = "src/main.rs"
+
+[dependencies]
+frigate-common = { path = "../common" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+rand = { workspace = true }
+
+# ZMQ — wraps libzmq (same as pyzmq)
+tmq = "0.4"
+zmq = "0.10"
+
+# MP4 validation (replaces ffprobe subprocess)
+mp4parse = "0.17"
+
+# Filesystem watching (replaces psutil + polling)
+notify = { version = "6", features = ["serde"] }
+
+# SQLite (replaces Peewee ORM)
+rusqlite = { version = "0.31", features = ["bundled"] }
+tokio-rusqlite = "0.5"
+
+# System info for disk usage (replaces Python's shutil.disk_usage)
+sysinfo = "0.30"

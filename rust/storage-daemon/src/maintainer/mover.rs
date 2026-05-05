@@ -38,7 +38,16 @@ pub async fn move_segment(
         .with_context(|| format!("permanent path is not valid UTF-8: {}", perm_path.display()))?;
 
     let output = tokio::process::Command::new(ffmpeg_path)
-        .args(["-y", "-i", cache_str, "-c", "copy", "-movflags", "+faststart", perm_str])
+        .args([
+            "-y",
+            "-i",
+            cache_str,
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            perm_str,
+        ])
         .output()
         .await
         .with_context(|| format!("ffmpeg spawn failed for {}", cache_path.display()))?;

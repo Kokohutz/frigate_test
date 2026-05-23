@@ -268,7 +268,8 @@
       "anonymous": "anonymous",
       "logout": "Logout",
       "setPassword": "Set Password"
-    }
+    },
+    "pipeline": "Pipeline"
   },
   "toast": {
     "copyUrlToClipboard": "Copied URL to clipboard.",

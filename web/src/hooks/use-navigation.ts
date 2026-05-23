@@ -6,7 +6,12 @@ import { isDesktop } from "react-device-detect";
 import { FaCompactDisc, FaVideo } from "react-icons/fa";
 import { IoSearch } from "react-icons/io5";
 import { LuConstruction } from "react-icons/lu";
-import { MdCategory, MdChat, MdVideoLibrary } from "react-icons/md";
+import {
+  MdAccountTree,
+  MdCategory,
+  MdChat,
+  MdVideoLibrary,
+} from "react-icons/md";
 import { TbFaceId } from "react-icons/tb";
 import useSWR from "swr";
 import { useIsAdmin } from "./use-is-admin";
@@ -19,6 +24,7 @@ export const ID_PLAYGROUND = 5;
 export const ID_FACE_LIBRARY = 6;
 export const ID_CLASSIFICATION = 7;
 export const ID_CHAT = 8;
+export const ID_PIPELINE = 9;
 
 export default function useNavigation(
   variant: "primary" | "secondary" = "primary",
@@ -98,6 +104,14 @@ export default function useNavigation(
           title: "menu.chat",
           url: "/chat",
           enabled: isDesktop && isAdmin && hasChatAgent,
+        },
+        {
+          id: ID_PIPELINE,
+          variant,
+          icon: MdAccountTree,
+          title: "menu.pipeline",
+          url: "/pipeline",
+          enabled: isDesktop && isAdmin,
         },
       ] as NavData[],
     [config?.face_recognition?.enabled, hasChatAgent, variant, isAdmin],

@@ -19,7 +19,15 @@ from joserfc import jwt
 from peewee import DoesNotExist
 from slowapi import Limiter
 
+from frigate.auth.totp import (
+    generate_recovery_codes,
+    generate_secret,
+    provisioning_uri,
+    verify_code,
+)
 from frigate.api.defs.request.app_body import (
+    AppPost2FAEnableBody,
+    AppPost2FAVerifyBody,
     AppPostLoginBody,
     AppPostUsersBody,
     AppPutPasswordBody,
@@ -832,6 +840,29 @@ def login(request: Request, body: AppPostLoginBody):
                 f"User {db_user.username} has an invalid role {role}, falling back to 'viewer'."
             )
             role = "viewer"
+
+        # If 2FA is enrolled, do NOT issue the JWT yet — issue a short-lived
+        # challenge token instead. The UI must POST to /login/2fa with the
+        # 6-digit code to complete the login.
+        if getattr(db_user, "totp_enabled", False) and getattr(
+            db_user, "totp_secret", None
+        ):
+            challenge_exp = int(time.time()) + 300  # 5 min to enter code
+            challenge_jwt = jwt.encode(
+                {"alg": "HS256"},
+                {
+                    "u": user,
+                    "r": role,
+                    "exp": challenge_exp,
+                    "stage": "2fa",
+                },
+                request.app.jwt_token,
+            )
+            return JSONResponse(
+                content={"requires_2fa": True, "challenge": challenge_jwt},
+                status_code=200,
+            )
+
         expiration = int(time.time()) + JWT_SESSION_LENGTH
         encoded_jwt = create_encoded_jwt(user, role, expiration, request.app.jwt_token)
         response = Response("", 200)
@@ -845,6 +876,152 @@ def login(request: Request, body: AppPostLoginBody):
 
         return response
     return JSONResponse(content={"message": "Login failed"}, status_code=401)
+
+
+@router.post(
+    "/login/2fa",
+    dependencies=[Depends(allow_public())],
+    summary="Verify 2FA code and complete login",
+    description="Second step of two-factor login. Provide the challenge token from /login and the 6-digit TOTP code (or a XXXX-XXXX-XXXX recovery code). Returns the JWT cookie on success.",
+)
+@limiter.limit(limit_value=rateLimiter.get_limit)
+def login_2fa(request: Request, body: AppPost2FAVerifyBody):
+    JWT_COOKIE_NAME = request.app.frigate_config.auth.cookie_name
+    JWT_COOKIE_SECURE = request.app.frigate_config.auth.cookie_secure
+    JWT_SESSION_LENGTH = request.app.frigate_config.auth.session_length
+
+    try:
+        decoded = jwt.decode(body.challenge, request.app.jwt_token)
+        claims = decoded.claims
+    except Exception:
+        return JSONResponse(content={"message": "Invalid challenge"}, status_code=401)
+
+    if claims.get("stage") != "2fa" or claims.get("exp", 0) < int(time.time()):
+        return JSONResponse(content={"message": "Challenge expired"}, status_code=401)
+
+    username = claims["u"]
+    role = claims["r"]
+
+    try:
+        db_user: User = User.get_by_id(username)
+    except DoesNotExist:
+        return JSONResponse(content={"message": "User not found"}, status_code=401)
+
+    secret = getattr(db_user, "totp_secret", None)
+    if not secret:
+        return JSONResponse(content={"message": "2FA not configured"}, status_code=401)
+
+    code = body.code.strip().upper()
+    ok = False
+
+    # Try TOTP code first
+    if len(code) == 6 and code.isdigit():
+        ok = verify_code(secret, code)
+
+    # Fallback: try recovery code
+    if not ok and "-" in code:
+        existing = json.loads(getattr(db_user, "recovery_codes", None) or "[]")
+        if code in existing:
+            existing.remove(code)
+            db_user.recovery_codes = json.dumps(existing)
+            db_user.save()
+            ok = True
+
+    if not ok:
+        return JSONResponse(content={"message": "Invalid 2FA code"}, status_code=401)
+
+    expiration = int(time.time()) + JWT_SESSION_LENGTH
+    encoded_jwt = create_encoded_jwt(username, role, expiration, request.app.jwt_token)
+    response = Response("", 200)
+    set_jwt_cookie(
+        response, JWT_COOKIE_NAME, encoded_jwt, expiration, JWT_COOKIE_SECURE
+    )
+    if role == "admin":
+        request.app.frigate_config.auth.admin_first_time_login = False
+    return response
+
+
+@router.post(
+    "/2fa/setup",
+    dependencies=[Depends(require_role(["admin"]))],
+    summary="Begin 2FA enrollment (admin)",
+    description="Generates a fresh TOTP secret for the current admin user and returns it along with an otpauth:// URI for QR-code rendering. Call /2fa/enable with a valid 6-digit code to finalize enrollment.",
+)
+def setup_2fa(request: Request):
+    username = request.state.username if hasattr(request.state, "username") else None
+    if not username:
+        return JSONResponse(content={"message": "Unauthorized"}, status_code=401)
+
+    try:
+        db_user: User = User.get_by_id(username)
+    except DoesNotExist:
+        return JSONResponse(content={"message": "User not found"}, status_code=404)
+
+    secret = generate_secret()
+    db_user.totp_secret = secret
+    db_user.totp_enabled = False  # not enabled until /2fa/enable confirms
+    db_user.save()
+    return JSONResponse(
+        content={
+            "secret": secret,
+            "uri": provisioning_uri(username, secret),
+        }
+    )
+
+
+@router.post(
+    "/2fa/enable",
+    dependencies=[Depends(require_role(["admin"]))],
+    summary="Confirm 2FA enrollment (admin)",
+    description="Verifies the user's first TOTP code. On success, marks 2FA as enabled and returns a list of one-time recovery codes that must be stored securely by the user.",
+)
+def enable_2fa(request: Request, body: AppPost2FAEnableBody):
+    username = request.state.username if hasattr(request.state, "username") else None
+    if not username:
+        return JSONResponse(content={"message": "Unauthorized"}, status_code=401)
+
+    try:
+        db_user: User = User.get_by_id(username)
+    except DoesNotExist:
+        return JSONResponse(content={"message": "User not found"}, status_code=404)
+
+    secret = getattr(db_user, "totp_secret", None)
+    if not secret:
+        return JSONResponse(
+            content={"message": "Call /2fa/setup first"}, status_code=400
+        )
+
+    if not verify_code(secret, body.code.strip()):
+        return JSONResponse(content={"message": "Invalid code"}, status_code=401)
+
+    recovery = generate_recovery_codes(10)
+    db_user.totp_enabled = True
+    db_user.recovery_codes = json.dumps(recovery)
+    db_user.save()
+    return JSONResponse(content={"enabled": True, "recovery_codes": recovery})
+
+
+@router.post(
+    "/2fa/disable",
+    dependencies=[Depends(require_role(["admin"]))],
+    summary="Disable 2FA (admin)",
+    description="Removes the TOTP secret and recovery codes for the current admin user.",
+)
+def disable_2fa(request: Request):
+    username = request.state.username if hasattr(request.state, "username") else None
+    if not username:
+        return JSONResponse(content={"message": "Unauthorized"}, status_code=401)
+
+    try:
+        db_user: User = User.get_by_id(username)
+    except DoesNotExist:
+        return JSONResponse(content={"message": "User not found"}, status_code=404)
+
+    db_user.totp_secret = None
+    db_user.totp_enabled = False
+    db_user.recovery_codes = None
+    db_user.save()
+    return JSONResponse(content={"disabled": True})
 
 
 @router.get(

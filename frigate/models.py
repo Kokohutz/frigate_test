@@ -150,6 +150,9 @@ class User(Model):
     password_hash = CharField(null=False, max_length=120)
     password_changed_at = DateTimeField(null=True)
     notification_tokens = JSONField()
+    totp_secret = CharField(null=True, max_length=64)
+    totp_enabled = BooleanField(default=False)
+    recovery_codes = TextField(null=True)
 
     @classmethod
     def get_allowed_cameras(

@@ -26,6 +26,15 @@ class AppPostLoginBody(BaseModel):
     password: str
 
 
+class AppPost2FAVerifyBody(BaseModel):
+    challenge: str = Field(..., description="Challenge token from /login response")
+    code: str = Field(..., description="6-digit TOTP code or XXXX-XXXX-XXXX recovery")
+
+
+class AppPost2FAEnableBody(BaseModel):
+    code: str = Field(..., description="6-digit TOTP code to confirm enrollment")
+
+
 class AppPutRoleBody(BaseModel):
     role: str
 

@@ -105,7 +105,8 @@
     "frigateplus": "Frigate+",
     "maintenance": "Maintenance",
     "mediaSync": "Media sync",
-    "regionGrid": "Region grid"
+    "regionGrid": "Region grid",
+    "modelConverter": "Model converter"
   },
   "dialog": {
     "unsavedChanges": {

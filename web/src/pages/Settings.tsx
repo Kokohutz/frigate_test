@@ -37,6 +37,7 @@ import CameraManagementView from "@/views/settings/CameraManagementView";
 import MotionTunerView from "@/views/settings/MotionTunerView";
 import MasksAndZonesView from "@/views/settings/MasksAndZonesView";
 import UsersView from "@/views/settings/UsersView";
+import ModelConverterView from "@/views/settings/ModelConverterView";
 import RolesView from "@/views/settings/RolesView";
 import UiSettingsView from "@/views/settings/UiSettingsView";
 import ProfilesView from "@/views/settings/ProfilesView";
@@ -167,6 +168,7 @@ const allSettingsViews = [
   "frigateplus",
   "mediaSync",
   "regionGrid",
+  "modelConverter",
 ] as const;
 type SettingsType = (typeof allSettingsViews)[number];
 
@@ -445,6 +447,7 @@ const settingsGroups = [
     items: [
       { key: "mediaSync", component: MediaSyncSettingsView },
       { key: "regionGrid", component: RegionGridSettingsView },
+      { key: "modelConverter", component: ModelConverterView },
     ],
   },
 ];

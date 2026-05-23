@@ -21,6 +21,8 @@ A modern, AI-first NVR built on Rust microservices, with end-to-end TLS, hardwar
 - 🦀 **6 Rust microservices** handling everything storage and IPC. Sub-millisecond IPC, 15 ms cold starts, 50× fewer subprocess forks per minute.
 - 🎯 **Visual pipeline editor** — wire cameras → detectors → AI agents → storage from your browser. No more hand-edited YAML.
 - 🤖 **9 LLM providers built-in** — Anthropic Claude, OpenAI, Azure, Gemini, Zhipu GLM, Z.AI (GLM coding + thinking), Alibaba Qwen, Ollama, llama.cpp. Hot-swap providers per camera.
+- 🛡️ **Local / Offline Mode** — one toggle disables every cloud AI provider system-wide and greys out the relevant settings; perfect for air-gapped sites.
+- 🔁 **Built-in model converter** — drop a `.pt` / `.onnx` / `.tflite` / `.h5` / `.pb` and Argus converts it to the format your active detector expects (ONNX → TFLite → EdgeTPU → TensorRT → OpenVINO).
 - 🔐 **Native TOTP 2FA** for admin accounts with recovery codes. RFC 6238 implementation using only the `cryptography` wheel — no extra deps.
 - 📦 **Transparent at-rest encryption** (AES-256-GCM / ChaCha20-Poly1305) of all MP4 segments.
 - 🗄️ **Tiered storage** — automatic hot NVMe → cold HDD/NAS migration with retention policies that respect retained events.
@@ -63,6 +65,11 @@ open https://localhost:8971
 ```
 
 First-time login: username `admin`, password printed once to the container log. Argus will immediately prompt you to **enable 2FA** before allowing any config changes.
+
+> **Full deployment guide:** see [**RUN.md**](RUN.md) for the production Compose
+> file, every pre-start environment variable, hardware accelerator wiring
+> (Coral · Intel · NVIDIA · Hailo · Rockchip), TLS certificate setup, and a
+> first-run troubleshooting checklist.
 
 ---
 
@@ -116,7 +123,7 @@ Click a node to edit. Drag to rearrange. Add detectors and GenAI agents from a 2
 
 The pipeline automatically shows **tiered storage nodes** (hot/cold) when tiered storage is enabled, and always shows the **Event Router** node so you can configure notification sinks without touching YAML.
 
-### 🤖 8 LLM providers, one click
+### 🤖 9 LLM providers, one click
 
 | Provider | Model examples | Local / cloud | API key needed |
 |---|---|---|---|
@@ -133,6 +140,31 @@ The pipeline automatically shows **tiered storage nodes** (hot/cold) when tiered
 Pick a provider card and Argus auto-fills the default model, recommended base URL, and shows only the fields that provider actually needs. Local-only setups (Ollama, llama.cpp) skip the API-key field entirely.
 
 **GenAI roles:** Each agent can be assigned one or more roles — `descriptions` (generate natural-language event descriptions), `chat` (conversational Q&A about detections). Multiple agents can chain roles.
+
+**Z.AI thinking mode:** the Z.AI provider targets `https://api.z.ai/api/coding/paas/v4` and supports GLM's `thinking` parameter — set `provider_options.thinking: true` and Argus forwards `{"thinking": {"type": "enabled"}}` on every request, identical to the official curl example.
+
+### 🛡️ Local / Offline Mode
+
+A single toggle (Settings → General → **Local / Offline Mode**) prevents Argus from ever contacting an external AI service. When on:
+
+- `GenAIClientManager` returns `None` from all three role properties (`chat`, `descriptions`, `embeddings`), silencing every GenAI provider with no per-feature flags.
+- The **Enrichments** and **Frigate+** groups in the settings sidebar are greyed out (`opacity-40` + `pointer-events-none`) on desktop and mobile, with a tooltip explaining why.
+- Local detection (CPU · Coral · TensorRT · OpenVINO · RKNN · Hailo), local semantic-search embeddings, recording, MQTT, and live streams continue to work normally.
+
+Useful for air-gapped sites, privacy audits, or temporarily disabling cloud AI while you swap API keys.
+
+### 🔁 Built-in model converter
+
+Settings → Maintenance → **Model converter** accepts any common ML model file and converts it to the format your active detector expects. ONNX is the universal intermediate hub:
+
+| Source | → Intermediate | → Target |
+|---|---|---|
+| `.pt` / `.pth` (PyTorch / Ultralytics YOLO) | ONNX | TFLite · EdgeTPU · TensorRT · OpenVINO |
+| `.h5` / `.pb` (Keras / TF SavedModel) | ONNX | TFLite · EdgeTPU · TensorRT · OpenVINO |
+| `.onnx` | — | TFLite · EdgeTPU · TensorRT · OpenVINO |
+| `.tflite` | — | EdgeTPU (compile) |
+
+The active detector's expected format is auto-suggested from `config.detectors[].type`. The conversion runs as a `BackgroundTask` with a polling job ID, live progress, and a tail of the underlying converter's logs (`edgetpu_compiler`, `trtexec`, `mo`, …). Hailo and RKNN require their proprietary SDKs in the container; the UI shows a clear error message if they are missing rather than silently producing garbage.
 
 ### 🔐 Secure login with 2FA
 
@@ -411,12 +443,15 @@ event_router:
 | ✅ | Rust event-router (MQTT/Discord/Slack/Telegram/webhook) |
 | ✅ | Rust detection-bridge (multi-model chain) |
 | ✅ | Anthropic/GLM/Qwen GenAI providers |
+| ✅ | Z.AI provider (api.z.ai coding endpoint with `thinking` mode) |
 | ✅ | Visual pipeline editor (React Flow) |
 | ✅ | Native TOTP 2FA with recovery codes |
 | ✅ | 2FA enrollment wizard UI (4-stage dialog) |
 | ✅ | Tiered storage UI (hot/cold config dialog) |
 | ✅ | Event router UI (per-sink enable/config dialog) |
 | ✅ | Mobile-responsive pipeline (no minimap, compact toolbar) |
+| ✅ | Local / Offline Mode toggle (greys out cloud AI settings) |
+| ✅ | Built-in model converter (PyTorch / TF / Keras / ONNX → device format) |
 | 🚧 | Synaptics SL1680 YOLO support (currently SSD only) |
 | 🔭 | WebAuthn / hardware security keys |
 | 🔭 | Federated multi-site dashboard |

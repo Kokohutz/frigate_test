@@ -6,7 +6,7 @@
 
 A modern, AI-first NVR built on Rust microservices, with end-to-end TLS, hardware-agnostic detection, and a visual pipeline editor.
 
-![Pipeline canvas](docs/images/hero-canvas-dark.png)
+![Argus UI demo](docs/images/demo.gif)
 
 </div>
 
@@ -18,7 +18,7 @@ A modern, AI-first NVR built on Rust microservices, with end-to-end TLS, hardwar
 
 **You get:**
 
-- 🦀 **6 Rust microservices** handling everything storage and IPC. Sub-millisecond IPC, 15ms cold starts, 50× fewer subprocess forks per minute.
+- 🦀 **6 Rust microservices** handling everything storage and IPC. Sub-millisecond IPC, 15 ms cold starts, 50× fewer subprocess forks per minute.
 - 🎯 **Visual pipeline editor** — wire cameras → detectors → AI agents → storage from your browser. No more hand-edited YAML.
 - 🤖 **8 LLM providers built-in** — Anthropic Claude, OpenAI, Azure, Gemini, Zhipu GLM, Alibaba Qwen, Ollama, llama.cpp. Hot-swap providers per camera.
 - 🔐 **Native TOTP 2FA** for admin accounts with recovery codes. RFC 6238 implementation using only the `cryptography` wheel — no extra deps.
@@ -66,35 +66,140 @@ First-time login: username `admin`, password printed once to the container log. 
 
 ---
 
+## Screenshots
+
+### Visual pipeline editor
+
+The pipeline page gives a live graph of your entire NVR stack. Click any node to edit its settings. Drag nodes to rearrange. Use the toolbar to add detectors, GenAI agents, and configure tiered storage or event routing.
+
+| Dark theme | Light theme |
+|:---:|:---:|
+| ![Pipeline dark](docs/images/v2/pipeline-tiered-dark.png) | ![Pipeline light](docs/images/v2/pipeline-tiered-light.png) |
+
+### Tiered storage configuration
+
+| Dark theme | Light theme |
+|:---:|:---:|
+| ![Tiers dark](docs/images/v2/dialog-tiers-dark.png) | ![Tiers light](docs/images/v2/dialog-tiers-light.png) |
+
+### Event router configuration
+
+| Dark theme | Light theme |
+|:---:|:---:|
+| ![Router dark](docs/images/v2/dialog-router-dark.png) | ![Router light](docs/images/v2/dialog-router-light.png) |
+
+### User management with 2FA
+
+| Users list | 2FA intro | QR code scan | Code verify | Recovery codes |
+|:---:|:---:|:---:|:---:|:---:|
+| ![Users](docs/images/v2/users-list-dark.png) | ![Intro](docs/images/v2/twofa-intro-dark.png) | ![QR](docs/images/v2/twofa-scan-dark.png) | ![Verify](docs/images/v2/twofa-verify-dark.png) | ![Recovery](docs/images/v2/twofa-recovery-dark.png) |
+
+### Mobile-responsive UI
+
+All pages adapt to mobile viewports. The pipeline hides the minimap and collapses toolbar labels to icons on small screens.
+
+| Login | 2FA prompt | Pipeline |
+|:---:|:---:|:---:|
+| ![Mobile login](docs/images/v2/mobile-login-dark.png) | ![Mobile 2FA](docs/images/v2/mobile-login-2fa-dark.png) | ![Mobile pipeline](docs/images/v2/mobile-pipeline-dark.png) |
+
+| Settings menu | Users |
+|:---:|:---:|
+| ![Mobile settings](docs/images/v2/mobile-settings-menu-dark.png) | ![Mobile users](docs/images/v2/mobile-users-dark.png) |
+
+---
+
 ## Features at a glance
 
 ### 🎯 Visual pipeline editor
 
 Click a node to edit. Drag to rearrange. Add detectors and GenAI agents from a 2-column grid of provider cards. Every numeric field uses a slider so you can sweep through values and see the effect.
 
-| Pipeline canvas | Camera config | GenAI agent config |
-|:---:|:---:|:---:|
-| ![Canvas](docs/images/hero-canvas-dark.png) | ![Camera edit](docs/images/edit-camera.png) | ![GenAI edit](docs/images/edit-genai.png) |
+The pipeline automatically shows **tiered storage nodes** (hot/cold) when tiered storage is enabled, and always shows the **Event Router** node so you can configure notification sinks without touching YAML.
 
 ### 🤖 8 LLM providers, one click
 
-| Add agent dialog | Detector picker |
-|:---:|:---:|
-| ![Add GenAI](docs/images/add-genai.png) | ![Add detector](docs/images/add-detector.png) |
+| Provider | Model examples | Local / cloud | API key needed |
+|---|---|---|---|
+| **Anthropic Claude** | claude-opus-4-7, claude-sonnet-4-6 | Cloud | ✅ |
+| **OpenAI** | gpt-4o, gpt-4o-mini, o1, o3 | Cloud | ✅ |
+| **Azure OpenAI** | Any Azure deployment | Cloud | ✅ |
+| **Google Gemini** | gemini-2.0-flash, gemini-1.5-pro | Cloud | ✅ |
+| **Zhipu GLM** | glm-4v, glm-4v-plus | Cloud | ✅ |
+| **Alibaba Qwen** | qwen-vl-max, qwen-vl-plus | Cloud | ✅ |
+| **Ollama** | llava:34b, llava-phi3, moondream | Local | ❌ |
+| **llama.cpp** | Any GGUF vision model | Local | ❌ |
 
 Pick a provider card and Argus auto-fills the default model, recommended base URL, and shows only the fields that provider actually needs. Local-only setups (Ollama, llama.cpp) skip the API-key field entirely.
 
+**GenAI roles:** Each agent can be assigned one or more roles — `descriptions` (generate natural-language event descriptions), `chat` (conversational Q&A about detections). Multiple agents can chain roles.
+
 ### 🔐 Secure login with 2FA
 
-| Sign in | Authenticator code | Recovery code |
-|:---:|:---:|:---:|
-| ![Login](docs/images/login-creds.png) | ![2FA](docs/images/login-2fa-typed.png) | ![Recovery](docs/images/login-recovery.png) |
-
 - **TOTP (RFC 6238)**, SHA-1, 30-second period, 6 digits — compatible with Google Authenticator, 1Password, Authy, Bitwarden, and Aegis.
-- **10 one-time recovery codes** (format `XXXX-XXXX-XXXX`) generated on enrollment.
+- **4-stage enrollment wizard**: intro → QR code scan (with manual secret copy fallback) → first-code verification → recovery code download.
+- **10 one-time recovery codes** (format `XXXX-XXXX-XXXX`) generated on enrollment. Each is consumed atomically — works exactly once.
 - **Short-lived JWT challenge token** (5 min) issued after the password step; final session JWT only after the 2FA code verifies.
 - `slowapi` rate-limit applied to both `/login` and `/login/2fa`.
-- Recovery codes consumed atomically (each works once).
+
+### 🗄️ Tiered storage
+
+Recordings flow into a **hot tier** (fast NVMe or SSD) and are automatically migrated to a **cold tier** (HDD or NAS) by the `tiered-storage` Rust daemon when they age past the hot policy. The move is a copy-then-unlink (works across filesystems) and the SQLite `Recordings.path` column is updated in WAL mode with a 30-second busy timeout so Python and Rust co-exist gracefully.
+
+```yaml
+storage_tiers:
+  hot:  { path: /media/argus/hot,  max_days: 7,  max_gb: 500 }
+  cold: { path: /media/argus/cold, max_days: 90 }
+  policy:
+    event_hot_days: 14          # retained events stay hot 2× longer
+    migration_interval: 3600    # seconds between migration sweeps
+```
+
+Configure hot and cold paths, retention windows, and disk caps directly in the **Storage Tiers** dialog — no YAML required.
+
+### 📡 Event routing
+
+The `event-router` Rust daemon subscribes to `event/*` topics on the ZMQ proxy and fans them out to:
+
+| Sink | Protocol | Rate-limited | Auth |
+|---|---|---|---|
+| **Webhook** | HTTP POST (JSON) | ✅ | HMAC-SHA256 signature |
+| **Discord** | Webhook URL | ✅ | None (URL is secret) |
+| **Slack** | Incoming webhook | ✅ | None (URL is secret) |
+| **Telegram** | Bot API | ✅ | Bot token + chat ID |
+| **MQTT** | TCP/TLS | ✅ | Username/password |
+
+All sinks share a global `governor` token-bucket rate limiter (default: 30/min). Messages that exceed the rate are written to a SQLite **dead-letter queue** and retried on the next successful send window.
+
+### 🔍 Multi-model detection chain
+
+The `detection-bridge` Rust daemon speaks the exact `zmq_ipc` detector wire protocol, so activating it requires exactly one `config.yml` change:
+
+```yaml
+detectors:
+  my_chain:
+    type: zmq
+detection_bridge:
+  models:
+    - path: /config/model_cache/yolov8s.onnx
+      type: yolov8
+    - path: /config/model_cache/license_plate.onnx
+      type: yologeneric
+      filter_labels: [car, motorcycle, bus, truck]
+  merge: sequential_filter   # secondary runs on primary's boxes only
+```
+
+No Python changes. No rebuild. The bridge handles ONNX Runtime via the `ort` crate (statically linked), supports both `yolov8` and generic `yologeneric` ONNX topologies, and is multi-arch (amd64 + arm64/Jetson).
+
+### 📦 At-rest encryption
+
+The `encrypted-storage` Rust daemon transparently encrypts every MP4 segment before writing it to disk:
+
+- **Algorithm:** AES-256-GCM on x86 (hardware AES-NI), ChaCha20-Poly1305 on ARM/Pi (NEON)
+- **KDF:** Argon2id, memory cost 64 MiB, time cost 3, random salt per key
+- **File header:** `[magic(4) | version(4) | nonce(12) | key_id(32) | ciphertext...]`
+- **Read path:** HTTP range-decrypt server on `127.0.0.1:5002`; Nginx proxies `.mp4` reads there transparently
+
+Activation: set `STORAGE_ENCRYPTION_KEY` in the container environment. Zero code changes.
 
 ### 🦀 Rust microservices
 
@@ -109,9 +214,25 @@ Pick a provider card and Argus auto-fills the default model, recommended base UR
 
 All cargo tests pass — **68 tests across 6 crates**, 0 clippy warnings.
 
-### 📊 Performance
+---
 
-Measured on this branch with a real running `comms-dispatcher` and `pyzmq` clients (the same code path Frigate's Python uses):
+## Performance
+
+### Benchmark environment
+
+| Component | Details |
+|---|---|
+| **Cloud provider** | KVM virtual machine |
+| **CPU** | Intel Xeon @ 2.10 GHz — 4 vCPUs (4 cores, 1 thread/core) |
+| **RAM** | 16 GB (DDR4, no swap) |
+| **OS** | Ubuntu 24.04.4 LTS (Noble) — kernel 6.18.5 |
+| **Compiler** | Rust 1.82.0, release profile (`opt-level=3`, `lto=thin`) |
+| **ZMQ** | libzmq 4.3.5 (in-process IPC sockets, no network hops) |
+| **SQLite** | 3.45.3, WAL mode, `synchronous=NORMAL`, `busy_timeout=30 000 ms` |
+
+### Results
+
+Measured with a real running `comms-dispatcher` and `pyzmq` clients (the same code path Frigate's Python uses):
 
 ![Performance chart](docs/images/perf-chart.png)
 
@@ -177,6 +298,22 @@ Measured on this branch with a real running `comms-dispatcher` and `pyzmq` clien
    │       activates by setting detector.type: zmq            │
    └──────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Detector hardware support
+
+| Hardware | Type key | Notes |
+|---|---|---|
+| Google Coral TPU (USB) | `edgetpu` | M.2 + USB variants, SSD MobileNet v2 |
+| Google Coral TPU (PCIe M.2) | `edgetpu` | Requires pcie driver in container |
+| NVIDIA GPU | `tensorrt` | TensorRT 8+, YOLOv8 engines |
+| Intel iGPU / Arc | `openvino` | OpenVINO IR format models |
+| Hailo-8/8L | `hailo8` | Hailo Model Zoo YOLO variants |
+| AMD GPU (ROCm) | `rocm` | ROCm 5.7+, experimental |
+| Synaptics SL1680 | `sl1680` | SSD only (YOLOv8 pending) |
+| Multi-model chain | `zmq` | Activates detection-bridge Rust daemon |
+| CPU fallback | `cpu` | OpenCV DNN, no hardware needed |
 
 ---
 
@@ -275,8 +412,11 @@ event_router:
 | ✅ | Anthropic/GLM/Qwen GenAI providers |
 | ✅ | Visual pipeline editor (React Flow) |
 | ✅ | Native TOTP 2FA with recovery codes |
+| ✅ | 2FA enrollment wizard UI (4-stage dialog) |
+| ✅ | Tiered storage UI (hot/cold config dialog) |
+| ✅ | Event router UI (per-sink enable/config dialog) |
+| ✅ | Mobile-responsive pipeline (no minimap, compact toolbar) |
 | 🚧 | Synaptics SL1680 YOLO support (currently SSD only) |
-| 🚧 | Multi-user 2FA enrollment UI (currently admin-only) |
 | 🔭 | WebAuthn / hardware security keys |
 | 🔭 | Federated multi-site dashboard |
 

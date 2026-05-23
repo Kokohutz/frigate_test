@@ -14,6 +14,7 @@ import {
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { isMobile } from "react-device-detect";
 import { Button } from "@/components/ui/button";
 import ActivityIndicator from "@/components/indicators/activity-indicator";
 import { FrigateConfig } from "@/types/frigateConfig";
@@ -429,49 +430,55 @@ export function PipelineFlow() {
   return (
     <div className="relative flex h-full w-full flex-col">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-4 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2 sm:gap-3 sm:px-4">
         <span className="text-sm font-semibold">Pipeline</span>
-        <span className="text-xs text-muted-foreground">
-          {Object.keys(config.cameras ?? {}).length} cameras ·{" "}
-          {Object.keys(config.detectors ?? {}).length} detectors ·{" "}
-          {Object.keys(config.genai ?? {}).length} GenAI agents
-        </span>
-        <div className="ml-auto flex flex-wrap gap-2">
+        {!isMobile && (
+          <span className="text-xs text-muted-foreground">
+            {Object.keys(config.cameras ?? {}).length} cameras ·{" "}
+            {Object.keys(config.detectors ?? {}).length} detectors ·{" "}
+            {Object.keys(config.genai ?? {}).length} GenAI agents
+          </span>
+        )}
+        <div className="ml-auto flex flex-wrap gap-1.5">
           <Button
             size="sm"
             variant="outline"
-            className="h-7 gap-1.5 text-xs"
+            className="h-7 gap-1 px-2 text-[11px]"
             onClick={() => setShowAddDetector(true)}
+            title="Add Detector"
           >
-            <MdAddCircle className="size-3.5" />
-            Detector
+            <MdAddCircle className="size-3.5 shrink-0" />
+            {!isMobile && "Detector"}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 gap-1.5 text-xs"
+            className="h-7 gap-1 px-2 text-[11px]"
             onClick={() => setShowAddGenAI(true)}
+            title="Add GenAI Agent"
           >
-            <MdAddCircle className="size-3.5" />
-            GenAI Agent
+            <MdAddCircle className="size-3.5 shrink-0" />
+            {!isMobile && "GenAI Agent"}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 gap-1.5 text-xs"
+            className="h-7 gap-1 px-2 text-[11px]"
             onClick={() => setShowTiers(true)}
+            title="Storage Tiers"
           >
-            <MdOutlineSettings className="size-3.5" />
-            Storage Tiers
+            <MdOutlineSettings className="size-3.5 shrink-0" />
+            {!isMobile && "Storage Tiers"}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 gap-1.5 text-xs"
+            className="h-7 gap-1 px-2 text-[11px]"
             onClick={() => setShowRouter(true)}
+            title="Event Router"
           >
-            <MdOutlineSettings className="size-3.5" />
-            Event Router
+            <MdOutlineSettings className="size-3.5 shrink-0" />
+            {!isMobile && "Event Router"}
           </Button>
         </div>
       </div>
@@ -488,8 +495,8 @@ export function PipelineFlow() {
           onPaneClick={() => setSelectedNode(null)}
           nodeTypes={NODE_TYPES}
           fitView
-          fitViewOptions={{ padding: 0.25 }}
-          minZoom={0.25}
+          fitViewOptions={{ padding: isMobile ? 0.1 : 0.25 }}
+          minZoom={isMobile ? 0.15 : 0.25}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
           className="bg-background"
@@ -501,10 +508,12 @@ export function PipelineFlow() {
             className="opacity-30"
           />
           <Controls className="[&>button:hover]:bg-accent [&>button]:border-border [&>button]:bg-card [&>button]:text-foreground" />
-          <MiniMap
-            nodeStrokeWidth={3}
-            className="rounded-lg border border-border !bg-card"
-          />
+          {!isMobile && (
+            <MiniMap
+              nodeStrokeWidth={3}
+              className="rounded-lg border border-border !bg-card"
+            />
+          )}
         </ReactFlow>
       </div>
 

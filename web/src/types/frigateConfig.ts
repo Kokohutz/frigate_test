@@ -397,6 +397,7 @@ export type GenAIAgentConfig = {
 export interface FrigateConfig {
   version: string;
   safe_mode: boolean;
+  local_mode: boolean;
 
   audio: {
     enabled: boolean;

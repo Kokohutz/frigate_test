@@ -41,6 +41,7 @@
     "cameras": "Camera configuration",
     "ui": "UI",
     "uiSettings": "UI settings",
+    "localMode": "Local / Offline Mode",
     "profiles": "Profiles",
     "globalDetect": "Object detection",
     "globalRecording": "Recording",

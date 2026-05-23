@@ -24,6 +24,7 @@ class GenAIClientManager:
         self._configs: dict[str, GenAIConfig] = {}
         self._role_map: dict[GenAIRoleEnum, str] = {}
         self._clients: dict[str, "GenAIClient"] = {}
+        self._local_mode: bool = False
         self.update_config(config)
 
     def update_config(self, config: FrigateConfig) -> None:
@@ -38,6 +39,13 @@ class GenAIClientManager:
         self._configs = {}
         self._role_map = {}
         self._clients = {}
+        self._local_mode = getattr(config, "local_mode", False)
+
+        if self._local_mode:
+            logger.info(
+                "Local/Offline Mode is enabled — all GenAI providers are disabled."
+            )
+            return
 
         if not config.genai:
             return
@@ -93,18 +101,24 @@ class GenAIClientManager:
     @property
     def chat_client(self) -> "Optional[GenAIClient]":
         """Client configured for the chat role (e.g. chat with function calling)."""
+        if self._local_mode:
+            return None
         name = self._role_map.get(GenAIRoleEnum.chat)
         return self._get_client(name) if name else None
 
     @property
     def description_client(self) -> "Optional[GenAIClient]":
         """Client configured for the descriptions role (e.g. review descriptions, object descriptions)."""
+        if self._local_mode:
+            return None
         name = self._role_map.get(GenAIRoleEnum.descriptions)
         return self._get_client(name) if name else None
 
     @property
     def embeddings_client(self) -> "Optional[GenAIClient]":
         """Client configured for the embeddings role."""
+        if self._local_mode:
+            return None
         name = self._role_map.get(GenAIRoleEnum.embeddings)
         return self._get_client(name) if name else None
 

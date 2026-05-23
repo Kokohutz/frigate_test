@@ -365,6 +365,11 @@ class FrigateConfig(FrigateBaseModel):
         title="Safe mode",
         description="When enabled, start Frigate in safe mode with reduced features for troubleshooting.",
     )
+    local_mode: bool = Field(
+        default=False,
+        title="Local / Offline Mode",
+        description="When enabled, all cloud AI providers (GenAI, remote embeddings) are disabled and AI-related settings are locked in the UI. Use this to guarantee the system never contacts external services.",
+    )
 
     # Fields that install global state should be defined first, so that their validators run first.
     environment_vars: EnvVars = Field(

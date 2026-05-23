@@ -38,6 +38,7 @@ import MotionTunerView from "@/views/settings/MotionTunerView";
 import MasksAndZonesView from "@/views/settings/MasksAndZonesView";
 import UsersView from "@/views/settings/UsersView";
 import ModelConverterView from "@/views/settings/ModelConverterView";
+import LocalModeView from "@/views/settings/LocalModeView";
 import RolesView from "@/views/settings/RolesView";
 import UiSettingsView from "@/views/settings/UiSettingsView";
 import ProfilesView from "@/views/settings/ProfilesView";
@@ -107,6 +108,7 @@ import { useRestart } from "@/api/ws";
 
 const allSettingsViews = [
   "uiSettings",
+  "localMode",
   "profiles",
   "globalDetect",
   "globalRecording",
@@ -301,7 +303,10 @@ const CameraTimestampStyleSettingsPage = createSectionPage(
 const settingsGroups = [
   {
     label: "general",
-    items: [{ key: "uiSettings", component: UiSettingsView }],
+    items: [
+      { key: "uiSettings", component: UiSettingsView },
+      { key: "localMode", component: LocalModeView },
+    ],
   },
   {
     label: "globalConfig",
@@ -479,6 +484,9 @@ const CAMERA_SELECT_BUTTON_PAGES = [
 ];
 
 const ALLOWED_VIEWS_FOR_VIEWER = ["uiSettings", "notifications"];
+
+// Settings groups locked when Local/Offline Mode is active
+const LOCAL_MODE_LOCKED_GROUPS = new Set(["enrichments", "frigateplus"]);
 
 // keys for camera sections
 const CAMERA_SECTION_MAPPING: Record<string, SettingsType> = {
@@ -1461,8 +1469,22 @@ export default function Settings() {
                   visibleSettingsViews.includes(item.key as SettingsType),
                 );
                 if (filteredItems.length === 0) return null;
+                const isLocalModeLocked =
+                  !!config?.local_mode &&
+                  LOCAL_MODE_LOCKED_GROUPS.has(group.label);
                 return (
-                  <div key={group.label} className="mb-3">
+                  <div
+                    key={group.label}
+                    className={cn(
+                      "mb-3",
+                      isLocalModeLocked && "pointer-events-none opacity-40",
+                    )}
+                    title={
+                      isLocalModeLocked
+                        ? "Disabled — Local / Offline Mode is active"
+                        : undefined
+                    }
+                  >
                     {filteredItems.length > 1 && (
                       <h3 className="mb-2 ml-2 text-sm font-medium text-secondary-foreground">
                         <div>{t("menu." + group.label)}</div>
@@ -1760,8 +1782,22 @@ export default function Settings() {
                   visibleSettingsViews.includes(item.key as SettingsType),
                 );
                 if (filteredItems.length === 0) return null;
+                const isLocalModeLocked =
+                  !!config?.local_mode &&
+                  LOCAL_MODE_LOCKED_GROUPS.has(group.label);
                 return (
-                  <SidebarGroup key={group.label} className="py-1">
+                  <SidebarGroup
+                    key={group.label}
+                    className={cn(
+                      "py-1",
+                      isLocalModeLocked && "pointer-events-none opacity-40",
+                    )}
+                    title={
+                      isLocalModeLocked
+                        ? "Disabled — Local / Offline Mode is active"
+                        : undefined
+                    }
+                  >
                     {filteredItems.length === 1 ? (
                       <SidebarMenu>
                         <SidebarMenuItem>

@@ -22,10 +22,14 @@ import { DetectorNode } from "./nodes/DetectorNode";
 import { GenAINode } from "./nodes/GenAINode";
 import { MqttNode } from "./nodes/MqttNode";
 import { StorageNode } from "./nodes/StorageNode";
+import { TieredStorageNode } from "./nodes/TieredStorageNode";
+import { EventRouterNode } from "./nodes/EventRouterNode";
 import { NodeEditSheet } from "./panels/NodeEditSheet";
 import { AddGenAIDialog } from "./panels/AddGenAIDialog";
 import { AddDetectorDialog } from "./panels/AddDetectorDialog";
-import { MdAddCircle } from "react-icons/md";
+import { TieredStorageDialog } from "./panels/TieredStorageDialog";
+import { EventRouterDialog } from "./panels/EventRouterDialog";
+import { MdAddCircle, MdOutlineSettings } from "react-icons/md";
 
 const NODE_TYPES = {
   camera: CameraNode,
@@ -33,14 +37,74 @@ const NODE_TYPES = {
   genai: GenAINode,
   mqtt: MqttNode,
   storage: StorageNode,
+  tieredStorage: TieredStorageNode,
+  eventRouter: EventRouterNode,
 };
 
 export type PipelineNodeData = {
-  type: "camera" | "detector" | "genai" | "mqtt" | "storage";
+  type:
+    | "camera"
+    | "detector"
+    | "genai"
+    | "mqtt"
+    | "storage"
+    | "tieredStorage"
+    | "eventRouter";
   label: string;
   configKey: string;
   [key: string]: unknown;
 };
+
+type TierConfig = {
+  enabled: boolean;
+  hot: { path: string; maxDays: number; maxGb: number };
+  cold: { path: string; maxDays: number };
+};
+
+type RouterConfig = {
+  webhook: { enabled: boolean; url: string };
+  discord: { enabled: boolean; url: string };
+  slack: { enabled: boolean; url: string };
+  telegram: { enabled: boolean; token: string; chatId: string };
+  mqtt: { enabled: boolean; host: string; port: number; prefix: string };
+  rateLimit: number;
+};
+
+const DEFAULT_TIERS: TierConfig = {
+  enabled: false,
+  hot: { path: "/media/frigate/recordings", maxDays: 7, maxGb: 500 },
+  cold: { path: "/mnt/nas/frigate/recordings", maxDays: 90 },
+};
+
+const DEFAULT_ROUTER: RouterConfig = {
+  webhook: { enabled: false, url: "" },
+  discord: { enabled: false, url: "" },
+  slack: { enabled: false, url: "" },
+  telegram: { enabled: false, token: "", chatId: "" },
+  mqtt: { enabled: false, host: "", port: 1883, prefix: "argus" },
+  rateLimit: 30,
+};
+
+const TIERS_STORAGE_KEY = "argus-storage-tiers";
+const ROUTER_STORAGE_KEY = "argus-event-router";
+
+function loadTiers(): TierConfig {
+  try {
+    const raw = localStorage.getItem(TIERS_STORAGE_KEY);
+    return raw ? { ...DEFAULT_TIERS, ...JSON.parse(raw) } : DEFAULT_TIERS;
+  } catch {
+    return DEFAULT_TIERS;
+  }
+}
+
+function loadRouter(): RouterConfig {
+  try {
+    const raw = localStorage.getItem(ROUTER_STORAGE_KEY);
+    return raw ? { ...DEFAULT_ROUTER, ...JSON.parse(raw) } : DEFAULT_ROUTER;
+  } catch {
+    return DEFAULT_ROUTER;
+  }
+}
 
 export type PipelineNode = Node<PipelineNodeData>;
 
@@ -51,7 +115,11 @@ const X_SYSTEM = 810;
 const Y_GAP = 150;
 const Y_START = 60;
 
-function buildGraph(config: FrigateConfig): {
+function buildGraph(
+  config: FrigateConfig,
+  tiers: TierConfig,
+  router: RouterConfig,
+): {
   nodes: PipelineNode[];
   edges: Edge[];
 } {
@@ -142,38 +210,92 @@ function buildGraph(config: FrigateConfig): {
     });
   });
 
-  // Storage node
-  nodes.push({
-    id: "storage-main",
-    type: "storage",
-    position: { x: X_SYSTEM, y: Y_START },
-    data: {
+  // Storage — either tiered or single, never both
+  if (tiers.enabled) {
+    nodes.push({
+      id: "storage-hot",
+      type: "tieredStorage",
+      position: { x: X_SYSTEM, y: Y_START },
+      data: {
+        type: "tieredStorage",
+        label: "Hot Tier",
+        configKey: "storage_tiers.hot",
+        tier: "hot",
+        path: tiers.hot.path,
+        maxDays: tiers.hot.maxDays,
+        maxGb: tiers.hot.maxGb,
+      },
+    });
+    nodes.push({
+      id: "storage-cold",
+      type: "tieredStorage",
+      position: { x: X_SYSTEM, y: Y_START + 110 },
+      data: {
+        type: "tieredStorage",
+        label: "Cold Tier",
+        configKey: "storage_tiers.cold",
+        tier: "cold",
+        path: tiers.cold.path,
+        maxDays: tiers.cold.maxDays,
+      },
+    });
+    edges.push({
+      id: "e-hot-cold",
+      source: "storage-hot",
+      target: "storage-cold",
+      animated: true,
+      style: { stroke: "#0ea5e9", strokeWidth: 1.5, strokeDasharray: "4 4" },
+      label: "migrate",
+      labelStyle: { fontSize: 10, fill: "#0ea5e9" },
+      labelBgStyle: { fill: "transparent" },
+    });
+    cameraNames.forEach((name) => {
+      if (config.cameras[name].record?.enabled) {
+        edges.push({
+          id: `e-cam-${name}-storage-hot`,
+          source: `camera-${name}`,
+          sourceHandle: "record",
+          target: "storage-hot",
+          animated: true,
+          style: { stroke: "#f97316", strokeWidth: 1.5 },
+        });
+      }
+    });
+  } else {
+    nodes.push({
+      id: "storage-main",
       type: "storage",
-      label: "Storage",
-      configKey: "storage",
-      retainDays: config.record?.retain?.days ?? 7,
-      path: "/media/frigate/recordings",
-    },
-  });
-  cameraNames.forEach((name) => {
-    if (config.cameras[name].record?.enabled) {
-      edges.push({
-        id: `e-cam-${name}-storage`,
-        source: `camera-${name}`,
-        sourceHandle: "record",
-        target: "storage-main",
-        animated: true,
-        style: { stroke: "#f97316", strokeWidth: 1.5 },
-      });
-    }
-  });
+      position: { x: X_SYSTEM, y: Y_START },
+      data: {
+        type: "storage",
+        label: "Storage",
+        configKey: "storage",
+        retainDays: config.record?.retain?.days ?? 7,
+        path: "/media/frigate/recordings",
+      },
+    });
+    cameraNames.forEach((name) => {
+      if (config.cameras[name].record?.enabled) {
+        edges.push({
+          id: `e-cam-${name}-storage`,
+          source: `camera-${name}`,
+          sourceHandle: "record",
+          target: "storage-main",
+          animated: true,
+          style: { stroke: "#f97316", strokeWidth: 1.5 },
+        });
+      }
+    });
+  }
+
+  const systemBaseY = tiers.enabled ? Y_START + 240 : Y_START + 180;
 
   // MQTT node
   if (config.mqtt?.host) {
     nodes.push({
       id: "mqtt-main",
       type: "mqtt",
-      position: { x: X_SYSTEM, y: Y_START + 180 },
+      position: { x: X_SYSTEM, y: systemBaseY },
       data: {
         type: "mqtt",
         label: "MQTT",
@@ -193,6 +315,42 @@ function buildGraph(config: FrigateConfig): {
     });
   }
 
+  // Event router — always shown so users can configure it
+  nodes.push({
+    id: "event-router",
+    type: "eventRouter",
+    position: {
+      x: X_SYSTEM,
+      y: systemBaseY + (config.mqtt?.host ? 120 : 0),
+    },
+    data: {
+      type: "eventRouter",
+      label: "Event Router",
+      configKey: "event_router",
+      sinks: [
+        { type: "webhook", enabled: router.webhook.enabled },
+        { type: "discord", enabled: router.discord.enabled },
+        { type: "slack", enabled: router.slack.enabled },
+        { type: "telegram", enabled: router.telegram.enabled },
+        { type: "mqtt", enabled: router.mqtt.enabled },
+      ],
+      rateLimit: router.rateLimit,
+    },
+  });
+  cameraNames.forEach((name) => {
+    edges.push({
+      id: `e-cam-${name}-router`,
+      source: `camera-${name}`,
+      target: "event-router",
+      style: {
+        stroke: "#d946ef",
+        strokeWidth: 1.2,
+        strokeDasharray: "2 3",
+        opacity: 0.6,
+      },
+    });
+  });
+
   return { nodes, edges };
 }
 
@@ -201,9 +359,13 @@ export function PipelineFlow() {
     revalidateOnFocus: false,
   });
 
+  const [tiers, setTiers] = useState<TierConfig>(() => loadTiers());
+  const [router, setRouter] = useState<RouterConfig>(() => loadRouter());
+
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => (config ? buildGraph(config) : { nodes: [], edges: [] }),
-    [config],
+    () =>
+      config ? buildGraph(config, tiers, router) : { nodes: [], edges: [] },
+    [config, tiers, router],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<PipelineNode>(
@@ -226,6 +388,8 @@ export function PipelineFlow() {
   const [selectedNode, setSelectedNode] = useState<PipelineNode | null>(null);
   const [showAddGenAI, setShowAddGenAI] = useState(false);
   const [showAddDetector, setShowAddDetector] = useState(false);
+  const [showTiers, setShowTiers] = useState(false);
+  const [showRouter, setShowRouter] = useState(false);
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node as PipelineNode);
@@ -272,7 +436,7 @@ export function PipelineFlow() {
           {Object.keys(config.detectors ?? {}).length} detectors ·{" "}
           {Object.keys(config.genai ?? {}).length} GenAI agents
         </span>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <Button
             size="sm"
             variant="outline"
@@ -290,6 +454,24 @@ export function PipelineFlow() {
           >
             <MdAddCircle className="size-3.5" />
             GenAI Agent
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setShowTiers(true)}
+          >
+            <MdOutlineSettings className="size-3.5" />
+            Storage Tiers
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setShowRouter(true)}
+          >
+            <MdOutlineSettings className="size-3.5" />
+            Event Router
           </Button>
         </div>
       </div>
@@ -349,6 +531,38 @@ export function PipelineFlow() {
           onCreated={() => {
             setShowAddDetector(false);
             revalidate();
+          }}
+        />
+      )}
+
+      {showTiers && (
+        <TieredStorageDialog
+          value={tiers}
+          onClose={() => setShowTiers(false)}
+          onSave={(next) => {
+            setTiers(next);
+            try {
+              localStorage.setItem(TIERS_STORAGE_KEY, JSON.stringify(next));
+            } catch {
+              // ignore
+            }
+            setShowTiers(false);
+          }}
+        />
+      )}
+
+      {showRouter && (
+        <EventRouterDialog
+          value={router}
+          onClose={() => setShowRouter(false)}
+          onSave={(next) => {
+            setRouter(next);
+            try {
+              localStorage.setItem(ROUTER_STORAGE_KEY, JSON.stringify(next));
+            } catch {
+              // ignore
+            }
+            setShowRouter(false);
           }}
         />
       )}

@@ -14,7 +14,17 @@ import DeleteUserDialog from "@/components/overlay/DeleteUserDialog";
 import { HiTrash } from "react-icons/hi";
 import { FaUserEdit } from "react-icons/fa";
 
-import { LuPencil, LuPlus, LuShield, LuUserCog } from "react-icons/lu";
+import {
+  LuPencil,
+  LuPlus,
+  LuShield,
+  LuShieldCheck,
+  LuShieldOff,
+  LuUserCog,
+} from "react-icons/lu";
+import TwoFactorSetupDialog, {
+  TwoFactorDisableConfirm,
+} from "@/components/overlay/TwoFactorSetupDialog";
 import {
   Table,
   TableBody,
@@ -66,6 +76,10 @@ export default function AuthenticationView({
   const [selectedRole, setSelectedRole] = useState<string>();
   const [currentRoleCameras, setCurrentRoleCameras] = useState<string[]>([]);
   const [selectedRoleForDelete, setSelectedRoleForDelete] = useState<string>();
+
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [show2FADisable, setShow2FADisable] = useState(false);
+  const [twoFactorUser, setTwoFactorUser] = useState<string>();
 
   useEffect(() => {
     document.title = t("documentTitle.authentication");
@@ -161,6 +175,37 @@ export default function AuthenticationView({
         );
       });
   };
+
+  const onDisable2FA = useCallback(() => {
+    axios
+      .post("2fa/disable")
+      .then((response) => {
+        if (response.status === 200) {
+          setShow2FADisable(false);
+          mutateUsers(
+            (users) =>
+              users?.map((u) =>
+                u.username === twoFactorUser
+                  ? { ...u, totp_enabled: false }
+                  : u,
+              ),
+            false,
+          );
+          toast.success("Two-factor authentication disabled", {
+            position: "top-center",
+          });
+        }
+      })
+      .catch((error) => {
+        const errorMessage =
+          error.response?.data?.message ||
+          error.response?.data?.detail ||
+          "Unknown error";
+        toast.error(`Failed to disable 2FA: ${errorMessage}`, {
+          position: "top-center",
+        });
+      });
+  }, [mutateUsers, twoFactorUser]);
 
   const onChangeRole = (user: string, newRole: string) => {
     if (user === "admin") return;
@@ -461,20 +506,31 @@ export default function AuthenticationView({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            user.role === "admin" ? "default" : "outline"
-                          }
-                          className={
-                            user.role === "admin"
-                              ? "bg-primary/20 text-primary hover:bg-primary/30"
-                              : ""
-                          }
-                        >
-                          {t("role." + (user.role || "viewer"), {
-                            ns: "common",
-                          })}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              user.role === "admin" ? "default" : "outline"
+                            }
+                            className={
+                              user.role === "admin"
+                                ? "bg-primary/20 text-primary hover:bg-primary/30"
+                                : ""
+                            }
+                          >
+                            {t("role." + (user.role || "viewer"), {
+                              ns: "common",
+                            })}
+                          </Badge>
+                          {user.totp_enabled && (
+                            <Badge
+                              variant="outline"
+                              className="gap-1 border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300"
+                            >
+                              <LuShieldCheck className="size-3" />
+                              2FA
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <TooltipProvider>
@@ -527,6 +583,48 @@ export default function AuthenticationView({
                                 <p>{t("users.updatePassword")}</p>
                               </TooltipContent>
                             </Tooltip>
+
+                            {user.role === "admin" && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className={
+                                      user.totp_enabled
+                                        ? "h-8 border-green-500/40 px-2 text-green-700 hover:bg-green-500/10 dark:text-green-300"
+                                        : "h-8 px-2"
+                                    }
+                                    onClick={() => {
+                                      setTwoFactorUser(user.username);
+                                      if (user.totp_enabled) {
+                                        setShow2FADisable(true);
+                                      } else {
+                                        setShow2FASetup(true);
+                                      }
+                                    }}
+                                  >
+                                    {user.totp_enabled ? (
+                                      <LuShieldOff className="size-3.5" />
+                                    ) : (
+                                      <LuShieldCheck className="size-3.5" />
+                                    )}
+                                    <span className="ml-1.5 hidden sm:inline-block">
+                                      {user.totp_enabled
+                                        ? "Disable 2FA"
+                                        : "Enable 2FA"}
+                                    </span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>
+                                    {user.totp_enabled
+                                      ? "Disable two-factor authentication"
+                                      : "Enroll a TOTP authenticator"}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
 
                             {user.username !== "admin" && (
                               <Tooltip>
@@ -593,6 +691,32 @@ export default function AuthenticationView({
           availableRoles={availableRoles}
           onSave={(role) => onChangeRole(selectedUser!, role)}
           onCancel={() => setShowRoleChange(false)}
+        />
+      )}
+      {twoFactorUser && (
+        <TwoFactorSetupDialog
+          show={show2FASetup}
+          username={twoFactorUser}
+          onClose={() => setShow2FASetup(false)}
+          onEnrolled={() => {
+            mutateUsers(
+              (users) =>
+                users?.map((u) =>
+                  u.username === twoFactorUser
+                    ? { ...u, totp_enabled: true }
+                    : u,
+                ),
+              false,
+            );
+          }}
+        />
+      )}
+      {twoFactorUser && (
+        <TwoFactorDisableConfirm
+          show={show2FADisable}
+          username={twoFactorUser}
+          onCancel={() => setShow2FADisable(false)}
+          onConfirm={onDisable2FA}
         />
       )}
     </>

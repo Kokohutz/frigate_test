@@ -18,6 +18,7 @@ class GenAIProviderEnum(str, Enum):
     anthropic = "anthropic"
     glm = "glm"
     qwen = "qwen"
+    zai = "zai"
 
 
 class GenAIRoleEnum(str, Enum):

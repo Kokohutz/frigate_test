@@ -81,6 +81,15 @@ const PROVIDERS: Provider[] = [
     needsBaseUrl: false,
   },
   {
+    id: "zai",
+    label: "Z.AI (GLM coding)",
+    icon: <MdAutoAwesome className="size-4 text-sky-400" />,
+    defaultModel: "glm-5",
+    description: "GLM-5 / 4.6 via api.z.ai with thinking mode.",
+    needsApiKey: true,
+    needsBaseUrl: false,
+  },
+  {
     id: "qwen",
     label: "Alibaba Qwen",
     icon: <SiAlibabacloud className="size-4 text-purple-400" />,

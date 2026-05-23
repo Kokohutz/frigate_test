@@ -20,7 +20,7 @@ A modern, AI-first NVR built on Rust microservices, with end-to-end TLS, hardwar
 
 - 🦀 **6 Rust microservices** handling everything storage and IPC. Sub-millisecond IPC, 15 ms cold starts, 50× fewer subprocess forks per minute.
 - 🎯 **Visual pipeline editor** — wire cameras → detectors → AI agents → storage from your browser. No more hand-edited YAML.
-- 🤖 **8 LLM providers built-in** — Anthropic Claude, OpenAI, Azure, Gemini, Zhipu GLM, Alibaba Qwen, Ollama, llama.cpp. Hot-swap providers per camera.
+- 🤖 **9 LLM providers built-in** — Anthropic Claude, OpenAI, Azure, Gemini, Zhipu GLM, Z.AI (GLM coding + thinking), Alibaba Qwen, Ollama, llama.cpp. Hot-swap providers per camera.
 - 🔐 **Native TOTP 2FA** for admin accounts with recovery codes. RFC 6238 implementation using only the `cryptography` wheel — no extra deps.
 - 📦 **Transparent at-rest encryption** (AES-256-GCM / ChaCha20-Poly1305) of all MP4 segments.
 - 🗄️ **Tiered storage** — automatic hot NVMe → cold HDD/NAS migration with retention policies that respect retained events.
@@ -125,6 +125,7 @@ The pipeline automatically shows **tiered storage nodes** (hot/cold) when tiered
 | **Azure OpenAI** | Any Azure deployment | Cloud | ✅ |
 | **Google Gemini** | gemini-2.0-flash, gemini-1.5-pro | Cloud | ✅ |
 | **Zhipu GLM** | glm-4v, glm-4v-plus | Cloud | ✅ |
+| **Z.AI (GLM coding)** | glm-5, glm-4.6, glm-4.5 — with thinking mode | Cloud | ✅ |
 | **Alibaba Qwen** | qwen-vl-max, qwen-vl-plus | Cloud | ✅ |
 | **Ollama** | llava:34b, llava-phi3, moondream | Local | ❌ |
 | **llama.cpp** | Any GGUF vision model | Local | ❌ |

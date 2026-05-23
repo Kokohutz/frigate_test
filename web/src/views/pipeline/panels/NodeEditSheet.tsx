@@ -54,6 +54,7 @@ const GENAI_PROVIDERS = [
   "ollama",
   "openai",
   "qwen",
+  "zai",
 ];
 
 const GENAI_ROLES = ["chat", "descriptions", "embeddings"];

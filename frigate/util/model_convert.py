@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import enum
 import logging
-import os
 import shutil
 import subprocess
 import sys
@@ -136,7 +135,9 @@ def target_for_detector_type(detector_type: str) -> TargetFormat:
     return DETECTOR_TARGET.get(detector_type, TargetFormat.onnx)
 
 
-def _run_subprocess(job: ConversionJob, cmd: list[str], cwd: Optional[Path] = None) -> bool:
+def _run_subprocess(
+    job: ConversionJob, cmd: list[str], cwd: Optional[Path] = None
+) -> bool:
     """Run a conversion subprocess and stream output lines into the job log."""
     logger.info("Running: %s", " ".join(cmd))
     try:
@@ -195,7 +196,9 @@ print('EXPORTED_VIA_TORCH', dst)
     return _run_subprocess(job, [sys.executable, "-c", script])
 
 
-def _convert_onnx_to_tflite(job: ConversionJob, src: Path, dst: Path, quantize: bool) -> bool:
+def _convert_onnx_to_tflite(
+    job: ConversionJob, src: Path, dst: Path, quantize: bool
+) -> bool:
     """ONNX → SavedModel → TFLite. Optionally int8-quantize for EdgeTPU."""
     workdir = src.parent / f".tf_export_{src.stem}"
     workdir.mkdir(exist_ok=True)
@@ -354,7 +357,9 @@ def run_conversion(job: ConversionJob, source_path: Path) -> None:
                 shutil.copy2(source_path, tflite_path)
             else:
                 assert onnx_path is not None
-                job.message = "Converting ONNX → TFLite" + (" (int8 quant)" if quantize else "")
+                job.message = "Converting ONNX → TFLite" + (
+                    " (int8 quant)" if quantize else ""
+                )
                 ok = _convert_onnx_to_tflite(job, onnx_path, tflite_path, quantize)
                 if not ok:
                     raise RuntimeError("ONNX → TFLite conversion failed; see log")
@@ -396,7 +401,11 @@ def run_conversion(job: ConversionJob, source_path: Path) -> None:
             return
 
         if job.target_format in (TargetFormat.hailo, TargetFormat.rknn):
-            sdk_name = "Hailo Dataflow Compiler" if job.target_format == TargetFormat.hailo else "rknn-toolkit2"
+            sdk_name = (
+                "Hailo Dataflow Compiler"
+                if job.target_format == TargetFormat.hailo
+                else "rknn-toolkit2"
+            )
             raise RuntimeError(
                 f"{job.target_format.value.upper()} conversion requires the "
                 f"proprietary {sdk_name}, which cannot ship with Argus. "

@@ -1,7 +1,6 @@
 """Zhipu AI GLM Provider for Frigate AI (OpenAI-compatible API)."""
 
 import logging
-from typing import Optional
 
 from openai import OpenAI
 

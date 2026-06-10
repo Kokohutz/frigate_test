@@ -44,8 +44,7 @@ async def list_targets(request: Request):
     right target when the user opens the converter."""
     detectors = request.app.frigate_config.detectors
     detector_suggestions = {
-        name: target_for_detector_type(d.type).value
-        for name, d in detectors.items()
+        name: target_for_detector_type(d.type).value for name, d in detectors.items()
     }
     return JSONResponse(
         content={

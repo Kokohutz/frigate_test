@@ -124,7 +124,9 @@ class AnthropicClient(GenAIClient):
 
         try:
             max_tokens = int(
-                self.genai_config.provider_options.get("max_tokens", _DEFAULT_MAX_TOKENS)
+                self.genai_config.provider_options.get(
+                    "max_tokens", _DEFAULT_MAX_TOKENS
+                )
             )
             params: dict[str, Any] = {
                 "model": self.genai_config.model,
@@ -182,9 +184,7 @@ class AnthropicClient(GenAIClient):
         return {
             "name": fn.get("name", ""),
             "description": fn.get("description", ""),
-            "input_schema": fn.get(
-                "parameters", {"type": "object", "properties": {}}
-            ),
+            "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
         }
 
     @staticmethod

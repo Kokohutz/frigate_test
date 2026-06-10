@@ -468,7 +468,9 @@ class FrigateApp:
         import os
 
         if os.environ.get("FRIGATE_RUST_CLEANUP", "0") == "1":
-            logger.info("FRIGATE_RUST_CLEANUP=1: skipping Python RecordingCleanup (Rust owns this)")
+            logger.info(
+                "FRIGATE_RUST_CLEANUP=1: skipping Python RecordingCleanup (Rust owns this)"
+            )
             return
         self.record_cleanup = RecordingCleanup(self.config, self.stop_event)
         self.record_cleanup.start()
@@ -477,7 +479,9 @@ class FrigateApp:
         import os
 
         if os.environ.get("FRIGATE_RUST_CLEANUP", "0") == "1":
-            logger.info("FRIGATE_RUST_CLEANUP=1: skipping Python StorageMaintainer (Rust owns this)")
+            logger.info(
+                "FRIGATE_RUST_CLEANUP=1: skipping Python StorageMaintainer (Rust owns this)"
+            )
             return
         self.storage_maintainer = StorageMaintainer(self.config, self.stop_event)
         self.storage_maintainer.start()

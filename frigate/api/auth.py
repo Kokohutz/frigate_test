@@ -19,12 +19,6 @@ from joserfc import jwt
 from peewee import DoesNotExist
 from slowapi import Limiter
 
-from frigate.auth.totp import (
-    generate_recovery_codes,
-    generate_secret,
-    provisioning_uri,
-    verify_code,
-)
 from frigate.api.defs.request.app_body import (
     AppPost2FAEnableBody,
     AppPost2FAVerifyBody,
@@ -34,6 +28,12 @@ from frigate.api.defs.request.app_body import (
     AppPutRoleBody,
 )
 from frigate.api.defs.tags import Tags
+from frigate.auth.totp import (
+    generate_recovery_codes,
+    generate_secret,
+    provisioning_uri,
+    verify_code,
+)
 from frigate.config import AuthConfig, NetworkingConfig, ProxyConfig
 from frigate.const import CONFIG_DIR, JWT_SECRET_ENV_VAR, PASSWORD_HASH_ALGORITHM
 from frigate.models import User

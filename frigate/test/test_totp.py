@@ -6,16 +6,15 @@ Verifies the RFC 6238 reference vectors and the recovery-code generator.
 import unittest
 
 from frigate.auth.totp import (
-    _hotp,
     DIGITS,
     PERIOD,
+    _hotp,
     current_code,
     generate_recovery_codes,
     generate_secret,
     provisioning_uri,
     verify_code,
 )
-
 
 # ASCII "12345678901234567890" base32-encoded — the RFC 6238 SHA-1 test seed.
 RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
@@ -45,8 +44,8 @@ class TotpTest(unittest.TestCase):
     def test_verify_rejects_garbage(self):
         secret = generate_secret()
         self.assertFalse(verify_code(secret, ""))
-        self.assertFalse(verify_code(secret, "12345"))   # too short
-        self.assertFalse(verify_code(secret, "1234567")) # too long
+        self.assertFalse(verify_code(secret, "12345"))  # too short
+        self.assertFalse(verify_code(secret, "1234567"))  # too long
         self.assertFalse(verify_code(secret, "abcdef"))  # non-digit
         self.assertFalse(verify_code(secret, "000000"))  # almost certainly wrong
 

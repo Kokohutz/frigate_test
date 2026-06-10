@@ -95,6 +95,30 @@ The pipeline page gives a live graph of your entire NVR stack. Click any node to
 |:---:|:---:|
 | ![Router dark](docs/images/v2/dialog-router-dark.png) | ![Router light](docs/images/v2/dialog-router-light.png) |
 
+### Local / Offline Mode
+
+One toggle blocks every outbound cloud-AI call system-wide. Blocked features are listed with badges, and the **Enrichments** and **Frigate+** sidebar groups are greyed out while it's active.
+
+| Dark theme | Light theme |
+|:---:|:---:|
+| ![Local mode dark](docs/images/v2/localmode-on-dark.png) | ![Local mode light](docs/images/v2/localmode-on-light.png) |
+
+### Add a GenAI agent — 9 providers, one dialog
+
+Provider cards auto-fill the default model and only show the fields each provider needs. Shown here with **Z.AI (GLM coding)** selected — `glm-5` pre-filled, thinking mode supported.
+
+| Dark theme | Light theme |
+|:---:|:---:|
+| ![Add GenAI Z.AI dark](docs/images/v2/genai-zai-dark.png) | ![Add GenAI Z.AI light](docs/images/v2/genai-zai-light.png) |
+
+### Model converter
+
+Upload any `.pt` / `.onnx` / `.tflite` / `.h5` / `.pb` model and convert it to your detector's native format. The target is auto-suggested from the active detectors.
+
+| Converter | Target formats |
+|:---:|:---:|
+| ![Model converter dark](docs/images/v2/model-converter-dark.png) | ![Model converter targets dark](docs/images/v2/model-converter-targets-dark.png) |
+
 ### User management with 2FA
 
 | Users list | 2FA intro | QR code scan | Code verify | Recovery codes |
@@ -139,7 +163,7 @@ The pipeline automatically shows **tiered storage nodes** (hot/cold) when tiered
 
 Pick a provider card and Argus auto-fills the default model, recommended base URL, and shows only the fields that provider actually needs. Local-only setups (Ollama, llama.cpp) skip the API-key field entirely.
 
-**GenAI roles:** Each agent can be assigned one or more roles — `descriptions` (generate natural-language event descriptions), `chat` (conversational Q&A about detections). Multiple agents can chain roles.
+**GenAI roles:** Each agent can be assigned one or more roles — `descriptions` (generate natural-language event descriptions), `chat` (conversational Q&A about detections), `embeddings` (semantic search vectors). Multiple agents can chain roles.
 
 **Z.AI thinking mode:** the Z.AI provider targets `https://api.z.ai/api/coding/paas/v4` and supports GLM's `thinking` parameter — set `provider_options.thinking: true` and Argus forwards `{"thinking": {"type": "enabled"}}` on every request, identical to the official curl example.
 
@@ -245,7 +269,7 @@ Activation: set `STORAGE_ENCRYPTION_KEY` in the container environment. Zero code
 | `detection-bridge` | New. ONNX inference chain (primary YOLO → secondary on primary's boxes). Speaks the `zmq_ipc` detector wire protocol, zero Python changes to activate. | n/a (long-lived) |
 | `event-router` | New. Subscribes to `event/` topics, fans out to MQTT, webhooks, Discord, Telegram, Slack with `governor` rate-limiting and SQLite DLQ. | **15 ms** |
 
-All cargo tests pass — **68 tests across 6 crates**, 0 clippy warnings.
+All cargo tests pass — **68 tests across the workspace**, 0 clippy warnings (`cargo clippy --all-targets -- -D warnings`).
 
 ---
 

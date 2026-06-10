@@ -27,7 +27,8 @@ test.describe("README demo gif @screenshots", () => {
     mkdirSync(FRAME_DIR, { recursive: true });
 
     const page = frigateApp.page;
-    await page.setViewportSize({ width: 960, height: 600 });
+    // 16:9 1080p — assemble_gif.py emits the GIF at the same resolution
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.addInitScript(() => {
       localStorage.setItem(
         "frigate-ui-theme",

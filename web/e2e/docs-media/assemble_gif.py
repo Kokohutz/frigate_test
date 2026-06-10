@@ -1,8 +1,10 @@
-"""Assemble /tmp/demo-frames/*.png into docs/images/demo.gif."""
+"""Assemble /tmp/demo-frames/*.png into docs/images/demo.gif (16:9 1080p)."""
 
 import glob
 
 from PIL import Image
+
+SIZE = (1920, 1080)
 
 frames = sorted(glob.glob("/tmp/demo-frames/*.png"))
 print(f"{len(frames)} frames")
@@ -10,8 +12,8 @@ print(f"{len(frames)} frames")
 images = []
 for f in frames:
     im = Image.open(f).convert("RGB")
-    if im.size != (960, 600):
-        im = im.resize((960, 600), Image.LANCZOS)
+    if im.size != SIZE:
+        im = im.resize(SIZE, Image.LANCZOS)
     images.append(im.quantize(colors=256, method=Image.MEDIANCUT, dither=Image.FLOYDSTEINBERG))
 
 out = "/home/user/frigate_test/docs/images/demo.gif"

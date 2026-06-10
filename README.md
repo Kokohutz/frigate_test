@@ -307,53 +307,31 @@ Measured with a real running `comms-dispatcher` and `pyzmq` clients (the same co
 
 ## Architecture
 
-```
-                       ┌────────────────────────────────────────┐
-                       │  Browser  ·  React 19 + xyflow + SWR   │
-                       └────────────────────┬───────────────────┘
-                                            │ HTTPS (cookie JWT)
-                       ┌────────────────────▼───────────────────┐
-                       │       Nginx — TLS, basic auth gate     │
-                       └──┬───────────────┬─────────────────┬──┘
-                          │ /api          │ /vod (encrypted)│ /live
-                          ▼               ▼                 ▼
-   ┌────────────────────────────┐  ┌─────────────────┐  ┌──────────┐
-   │   FastAPI (frigate.api)    │  │ encrypted-      │  │  go2rtc  │
-   │   login · config · stats   │  │ storage 🦀      │  │  (RTSP   │
-   │   2FA · users · events     │  │ AES-GCM range   │  │  proxy)  │
-   └────────┬──────────┬────────┘  └────────┬────────┘  └──────────┘
-            │          │                    │
-            │ ZMQ REQ  │ ZMQ PUB             │ reads MP4
-            ▼          ▼                    ▼
-   ┌──────────────┐  ┌────────────────────────────────────┐
-   │ comms-       │  │  /media/argus/{hot,cold}/...       │
-   │ dispatcher🦀 │  │                                    │
-   │  REP socket  │  │  tiered-storage 🦀 migrates old    │
-   │  fast-paths  │  │   segments hot → cold via SQLite   │
-   │  4 topics    │  │   path rewrite (WAL mode)          │
-   └──┬───────────┘  └────────────────────────────────────┘
-      │ writes
-      ▼
-   ┌──────────────┐    subscribes      ┌─────────────────┐
-   │  SQLite WAL  │◄───────────────────│ storage-daemon🦀 │
-   │  /config/    │    inserts segs    │ scans inotify   │
-   │  argus.db    │    + previews +    │ validates with  │
-   │              │    review segs     │ mp4parse        │
-   └──────┬───────┘                    │ computes        │
-          │ tracks expired             │  motion heatmap │
-          ▼                            └────────┬────────┘
-   ┌──────────────────┐                         │
-   │ event-router 🦀  │◄─── PUB/SUB ────────────┘
-   │ MQTT / Discord / │     event/* topics
-   │ Slack / Webhook  │
-   │ + DLQ + RL       │
-   └──────────────────┘
+```mermaid
+flowchart TD
+    Browser["🌐 Browser<br/>React 19 · xyflow · SWR"]
+    Nginx["Nginx<br/>TLS termination · auth gate"]
 
-   ┌──────────────────────────────────────────────────────────┐
-   │     detection-bridge 🦀 — ZMQ REP at zmq_detector        │
-   │       primary YOLO → secondary (LPR · face · …)          │
-   │       activates by setting detector.type: zmq            │
-   └──────────────────────────────────────────────────────────┘
+    Browser -- "HTTPS (cookie JWT)" --> Nginx
+
+    Nginx -- "/api" --> FastAPI["FastAPI (frigate.api)<br/>login · config · stats<br/>2FA · users · events"]
+    Nginx -- "/vod (encrypted)" --> Enc["🦀 encrypted-storage<br/>AES-GCM range reads"]
+    Nginx -- "/live" --> Go2rtc["go2rtc<br/>RTSP / WebRTC proxy"]
+
+    FastAPI -- "ZMQ REQ + PUB" --> Dispatcher["🦀 comms-dispatcher<br/>REP socket<br/>4 fast-path topics"]
+    Dispatcher -- "writes" --> DB[("SQLite WAL<br/>/config/argus.db")]
+
+    Enc -- "reads MP4" --> Media["📁 /media/argus/ hot · cold"]
+    Tiered["🦀 tiered-storage<br/>migrates old segments hot → cold"] -- "SQLite path rewrite (WAL mode)" --> DB
+    Tiered -. "moves files" .-> Media
+
+    Storage["🦀 storage-daemon<br/>inotify scan · mp4parse validation<br/>motion heatmap"]
+    Storage -- "inserts segments<br/>+ previews + review segs" --> DB
+    Storage -- "PUB/SUB event/* topics" --> Router["🦀 event-router<br/>MQTT · Discord · Slack · Webhook<br/>DLQ + rate limiting"]
+    DB -- "tracks expired" --> Router
+
+    Detection["🦀 detection-bridge<br/>ZMQ REP at zmq_detector<br/>primary YOLO → secondary (LPR · face · …)"]
+    Detect["Detection process<br/>(detector.type: zmq)"] -- "ZMQ REQ<br/>frames via /dev/shm" --> Detection
 ```
 
 ---

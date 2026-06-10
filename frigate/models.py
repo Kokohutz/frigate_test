@@ -180,3 +180,28 @@ class Trigger(Model):
 
     class Meta:
         primary_key = CompositeKey("camera", "name")
+
+
+class AuditLog(Model):
+    id = IntegerField(primary_key=True)
+    timestamp = FloatField()
+    user = CharField(null=False, max_length=100)
+    action = CharField(null=False, max_length=50)
+    ip = CharField(null=True, max_length=45)
+    details = TextField(null=True)
+
+    class Meta:
+        table_name = "audit_log"
+
+
+class WebAuthnCredential(Model):
+    id = IntegerField(primary_key=True)
+    username = CharField(null=False, max_length=100)
+    credential_id = CharField(null=False, unique=True)
+    public_key = TextField(null=False)
+    sign_count = IntegerField(default=0)
+    name = CharField(null=False, max_length=200, default="")
+    created_at = FloatField()
+
+    class Meta:
+        table_name = "webauthn_credentials"

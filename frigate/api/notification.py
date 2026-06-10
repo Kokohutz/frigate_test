@@ -57,8 +57,12 @@ def get_vapid_pub_key(request: Request):
 )
 def register_notifications(request: Request, body: dict = None):
     if request.app.frigate_config.auth.enabled:
-        # FIXME: For FastAPI the remote-user is not being populated
-        username = request.headers.get("remote-user") or "admin"
+        # Read the authenticated user from the remote-user header set by the /auth endpoint.
+        # This header is injected by Nginx after JWT validation and is always present for
+        # requests that passed through allow_any_authenticated().
+        username = request.headers.get("remote-user")
+        if not username or username == "anonymous":
+            username = "admin"
     else:
         username = "admin"
 

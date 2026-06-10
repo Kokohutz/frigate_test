@@ -30,6 +30,8 @@ from frigate.api import (
     review,
 )
 from frigate.api.auth import get_jwt_secret, limiter, require_admin_by_default
+from frigate.api.federation import router as federation_router
+from frigate.api.webauthn import router as webauthn_router
 from frigate.comms.dispatcher import Dispatcher
 from frigate.comms.event_metadata_updater import (
     EventMetadataPublisher,
@@ -145,6 +147,8 @@ def create_fastapi_app(
     app.include_router(record.router)
     app.include_router(debug_replay.router)
     app.include_router(models.router)
+    app.include_router(webauthn_router)
+    app.include_router(federation_router)
     # App Properties
     app.frigate_config = frigate_config
     app.genai_manager = GenAIClientManager(frigate_config)

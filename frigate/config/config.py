@@ -337,6 +337,134 @@ def verify_objects_track(
         camera_config.objects.track = valid_objects
 
 
+class StorageTiersHotConfig(FrigateBaseModel):
+    path: str = Field(
+        default="/media/frigate/recordings", title="Hot tier path (NVMe/SSD)"
+    )
+    max_days: int = Field(default=7, ge=1, title="Max days to keep on hot tier")
+    max_gb: int = Field(
+        default=500, ge=1, title="Max gigabytes to allocate on hot tier"
+    )
+
+
+class StorageTiersColdConfig(FrigateBaseModel):
+    path: str = Field(
+        default="/mnt/nas/frigate/recordings", title="Cold tier path (HDD/NAS)"
+    )
+    max_days: int = Field(default=90, ge=1, title="Max days to keep on cold tier")
+
+
+class StorageTiersPolicyConfig(FrigateBaseModel):
+    event_hot_days: int = Field(
+        default=14, ge=1, title="Extra hot retention days for retained events"
+    )
+    migration_interval: int = Field(
+        default=3600, ge=60, title="Seconds between migration sweeps"
+    )
+
+
+class StorageTiersConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False, title="Enable tiered storage")
+    hot: StorageTiersHotConfig = Field(default_factory=StorageTiersHotConfig)
+    cold: StorageTiersColdConfig = Field(default_factory=StorageTiersColdConfig)
+    policy: StorageTiersPolicyConfig = Field(default_factory=StorageTiersPolicyConfig)
+
+
+class EventRouterSinkWebhookConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    url: str = Field(default="")
+
+
+class EventRouterSinkDiscordConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    webhook_url: str = Field(default="")
+    min_severity: str = Field(default="alert")
+
+
+class EventRouterSinkSlackConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    webhook_url: str = Field(default="")
+
+
+class EventRouterSinkTelegramConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    bot_token: str = Field(default="")
+    chat_id: str = Field(default="")
+
+
+class EventRouterSinkMqttConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    broker: str = Field(default="")
+
+
+class EventRouterSinkS3Config(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    bucket: str = Field(default="")
+    prefix: str = Field(default="argus-recordings/")
+    endpoint_url: str = Field(
+        default="", title="Leave empty for AWS S3; set for Backblaze B2 or MinIO"
+    )
+    access_key_id: str = Field(default="")
+    secret_access_key: str = Field(default="")
+    region: str = Field(default="us-east-1")
+
+
+class EventRouterRateLimitConfig(FrigateBaseModel):
+    per_minute: int = Field(default=10, ge=1)
+    burst: int = Field(default=3, ge=1)
+
+
+class EventRouterSinksConfig(FrigateBaseModel):
+    webhook: EventRouterSinkWebhookConfig = Field(
+        default_factory=EventRouterSinkWebhookConfig
+    )
+    discord: EventRouterSinkDiscordConfig = Field(
+        default_factory=EventRouterSinkDiscordConfig
+    )
+    slack: EventRouterSinkSlackConfig = Field(
+        default_factory=EventRouterSinkSlackConfig
+    )
+    telegram: EventRouterSinkTelegramConfig = Field(
+        default_factory=EventRouterSinkTelegramConfig
+    )
+    mqtt: EventRouterSinkMqttConfig = Field(default_factory=EventRouterSinkMqttConfig)
+    s3: EventRouterSinkS3Config = Field(default_factory=EventRouterSinkS3Config)
+
+
+class EventRouterAlertRuleConfig(FrigateBaseModel):
+    cameras: list[str] = Field(
+        default_factory=list, title="Camera names to match (empty = all)"
+    )
+    labels: list[str] = Field(
+        default_factory=list, title="Labels to match (empty = all)"
+    )
+    min_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    time_start: str = Field(default="", title="HH:MM 24h start (empty = always)")
+    time_end: str = Field(default="", title="HH:MM 24h end (empty = always)")
+    sinks: list[str] = Field(default_factory=list, title="Sink names to activate")
+
+
+class EventRouterConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    sinks: EventRouterSinksConfig = Field(default_factory=EventRouterSinksConfig)
+    rate_limit: EventRouterRateLimitConfig = Field(
+        default_factory=EventRouterRateLimitConfig
+    )
+    rules: list[EventRouterAlertRuleConfig] = Field(default_factory=list)
+
+
+class FederatedInstanceConfig(FrigateBaseModel):
+    url: str = Field(title="Base URL of the remote Argus instance")
+    token: str = Field(default="", title="Read-only API token for this instance")
+    name: str = Field(default="", title="Display name")
+
+
+class FederatedHubConfig(FrigateBaseModel):
+    enabled: bool = Field(default=False)
+    instances: list[FederatedInstanceConfig] = Field(default_factory=list)
+    poll_interval: int = Field(default=30, ge=5, title="Seconds between stats polls")
+
+
 def verify_lpr_and_face(
     frigate_config: FrigateConfig, camera_config: CameraConfig
 ) -> ValueError | None:
@@ -549,6 +677,22 @@ class FrigateConfig(FrigateBaseModel):
         default_factory=dict,
         title="Profiles",
         description="Named profile definitions with friendly names. Camera profiles must reference names defined here.",
+    )
+
+    storage_tiers: StorageTiersConfig = Field(
+        default_factory=StorageTiersConfig,
+        title="Tiered storage",
+        description="Configuration for automatic hot-to-cold tier migration of recordings.",
+    )
+    event_router: EventRouterConfig = Field(
+        default_factory=EventRouterConfig,
+        title="Event router",
+        description="Configuration for routing events to external sinks (webhook, Discord, Slack, Telegram, MQTT, S3).",
+    )
+    federation: FederatedHubConfig = Field(
+        default_factory=FederatedHubConfig,
+        title="Federation",
+        description="Hub-mode federation settings for aggregating stats from multiple remote Argus instances.",
     )
 
     active_profile: Optional[str] = Field(

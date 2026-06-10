@@ -36,7 +36,7 @@ from frigate.auth.totp import (
 )
 from frigate.config import AuthConfig, NetworkingConfig, ProxyConfig
 from frigate.const import CONFIG_DIR, JWT_SECRET_ENV_VAR, PASSWORD_HASH_ALGORITHM
-from frigate.models import User
+from frigate.models import AuditLog, User
 
 logger = logging.getLogger(__name__)
 
@@ -417,13 +417,13 @@ def create_encoded_jwt(user, role, expiration, secret):
 
 
 def set_jwt_cookie(response: Response, cookie_name, encoded_jwt, expiration, secure):
-    # TODO: ideally this would set secure as well, but that requires TLS
     response.set_cookie(
         key=cookie_name,
         value=encoded_jwt,
         httponly=True,
         expires=expiration,
-        secure=secure,
+        secure=True,
+        samesite="lax",
     )
 
 
@@ -829,6 +829,16 @@ def login(request: Request, body: AppPostLoginBody):
     try:
         db_user: User = User.get_by_id(user)
     except DoesNotExist:
+        try:
+            AuditLog.create(
+                timestamp=time.time(),
+                user=user,
+                action="login_failed",
+                ip=request.client.host if request.client else None,
+                details='{"reason": "user_not_found"}',
+            )
+        except Exception:
+            pass
         return JSONResponse(content={"message": "Login failed"}, status_code=401)
 
     password_hash = db_user.password_hash
@@ -874,7 +884,27 @@ def login(request: Request, body: AppPostLoginBody):
         if role == "admin":
             request.app.frigate_config.auth.admin_first_time_login = False
 
+        try:
+            AuditLog.create(
+                timestamp=time.time(),
+                user=user,
+                action="login",
+                ip=request.client.host if request.client else None,
+            )
+        except Exception:
+            pass
+
         return response
+    try:
+        AuditLog.create(
+            timestamp=time.time(),
+            user=user,
+            action="login_failed",
+            ip=request.client.host if request.client else None,
+            details='{"reason": "invalid_password"}',
+        )
+    except Exception:
+        pass
     return JSONResponse(content={"message": "Login failed"}, status_code=401)
 
 
@@ -938,6 +968,17 @@ def login_2fa(request: Request, body: AppPost2FAVerifyBody):
     )
     if role == "admin":
         request.app.frigate_config.auth.admin_first_time_login = False
+
+    try:
+        AuditLog.create(
+            timestamp=time.time(),
+            user=username,
+            action="2fa_verified",
+            ip=request.client.host if request.client else None,
+        )
+    except Exception:
+        pass
+
     return response
 
 
@@ -998,6 +1039,17 @@ def enable_2fa(request: Request, body: AppPost2FAEnableBody):
     db_user.totp_enabled = True
     db_user.recovery_codes = json.dumps(recovery)
     db_user.save()
+
+    try:
+        AuditLog.create(
+            timestamp=time.time(),
+            user=username,
+            action="2fa_enabled",
+            ip=request.client.host if request.client else None,
+        )
+    except Exception:
+        pass
+
     return JSONResponse(content={"enabled": True, "recovery_codes": recovery})
 
 
@@ -1021,6 +1073,17 @@ def disable_2fa(request: Request):
     db_user.totp_enabled = False
     db_user.recovery_codes = None
     db_user.save()
+
+    try:
+        AuditLog.create(
+            timestamp=time.time(),
+            user=username,
+            action="2fa_disabled",
+            ip=request.client.host if request.client else None,
+        )
+    except Exception:
+        pass
+
     return JSONResponse(content={"disabled": True})
 
 
@@ -1324,3 +1387,51 @@ async def get_allowed_cameras_for_filter(request: Request):
     all_camera_names = set(request.app.frigate_config.cameras.keys())
     roles_dict = request.app.frigate_config.auth.roles
     return User.get_allowed_cameras(role, roles_dict, all_camera_names)
+
+
+async def _exchange_2fa_challenge_for_session(
+    username: str, challenge_token: str, request: Request, response: Response
+):
+    """Exchange a 2FA challenge token for a full session JWT cookie.
+
+    Used by WebAuthn auth completion to reuse the same token-exchange flow
+    as the TOTP /login/2fa endpoint.
+    """
+    JWT_COOKIE_NAME = request.app.frigate_config.auth.cookie_name
+    JWT_COOKIE_SECURE = request.app.frigate_config.auth.cookie_secure
+    JWT_SESSION_LENGTH = request.app.frigate_config.auth.session_length
+
+    try:
+        decoded = jwt.decode(challenge_token, request.app.jwt_token)
+        claims = decoded.claims
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid challenge token")
+
+    if claims.get("stage") != "2fa" or claims.get("exp", 0) < int(time.time()):
+        raise HTTPException(status_code=401, detail="Challenge token expired")
+
+    if claims.get("u") != username:
+        raise HTTPException(status_code=401, detail="Challenge token user mismatch")
+
+    role = claims["r"]
+    expiration = int(time.time()) + JWT_SESSION_LENGTH
+    encoded_jwt = create_encoded_jwt(username, role, expiration, request.app.jwt_token)
+    set_jwt_cookie(
+        response, JWT_COOKIE_NAME, encoded_jwt, expiration, JWT_COOKIE_SECURE
+    )
+
+    if role == "admin":
+        request.app.frigate_config.auth.admin_first_time_login = False
+
+    try:
+        AuditLog.create(
+            timestamp=time.time(),
+            user=username,
+            action="2fa_verified",
+            ip=request.client.host if request.client else None,
+            details='{"method": "webauthn"}',
+        )
+    except Exception:
+        pass
+
+    return response

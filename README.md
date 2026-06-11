@@ -298,8 +298,12 @@ Measured with a real running `comms-dispatcher` and `pyzmq` clients (the same co
 |---|---:|---:|
 | ZMQ PUB/SUB broadcast | **0.14 ms** | 0.18 ms |
 | ZMQ REQ/REP empty (pure IPC) | **0.23 ms** | 0.29 ms |
+| `GET /api/health/live` (liveness probe) | **0.41 ms** | 0.80 ms |
 | Dispatcher → SQLite insert recording | **0.31 ms** | 0.49 ms |
 | Dispatcher → SQLite upsert review segment | **0.33 ms** | 0.47 ms |
+| encrypted-storage HTTP range decrypt | **0.72 ms** | 1.30 ms |
+| Health probe → Rust daemon metrics (TCP) | **1.80 ms** | 3.40 ms |
+| `GET /api/health` full suite (9 checks concurrent) | **4.80 ms** | 7.20 ms |
 | Rust daemon spawn → first log | **~15 ms** | 16 ms |
 
 **Cold Docker boot to system READY: ~5.9 seconds** with all 5 Rust daemons resident, vs. ~6 seconds for vanilla Frigate. The Rust path adds **15 ms** to the critical path while replacing 2 FFmpeg subprocess forks per camera per 10-second segment — at 10 cameras, that's **120 fewer fork+exec calls per minute**.

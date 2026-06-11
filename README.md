@@ -371,6 +371,30 @@ Roll back at any time by reverting the image and removing the two env vars. The 
 
 ---
 
+## Running your local build
+
+To build the image from your working tree and start the full stack:
+
+```bash
+# First time only
+mkdir -p config media
+cp config/config.yml.example config/config.yml
+# edit config/config.yml — add your cameras
+
+# Build from source and start everything
+docker compose -f docker-compose.local.yml up --build
+```
+
+- UI available at **http://localhost:5000** (or https://localhost:8971 for TLS)
+- Logs: `docker compose -f docker-compose.local.yml logs -f argus`
+- Rebuild after code changes: `docker compose -f docker-compose.local.yml up --build`
+
+> The existing `docker-compose.yml` in the repo root is the **VS Code devcontainer**
+> (it runs `sleep infinity` — it does not start the app). Use `docker-compose.local.yml`
+> to run your own code.
+
+---
+
 ## Building from source
 
 ### Rust workspace

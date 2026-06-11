@@ -1,0 +1,62 @@
+# Run YOUR local Argus build (builds from source, no upstream image pulled).
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up --build
+#
+# First time only — create a config and data directories:
+#   mkdir -p config media
+#   cp config/config.yml.example config/config.yml
+#   # edit config/config.yml to add your cameras
+
+services:
+
+  argus:
+    build:
+      context: .
+      dockerfile: docker/main/Dockerfile
+      target: frigate           # full production target (Python + Rust + web)
+    container_name: argus-local
+    restart: unless-stopped
+    shm_size: "256mb"           # bump to 128 MB × num_cameras for 1080p feeds
+    privileged: true            # needed for /dev/bus/usb (Coral) + hardware accel
+
+    ports:
+      - "5000:5000"     # HTTP  UI + API (no TLS)
+      - "8971:8971"     # HTTPS UI + API (self-signed cert)
+      - "8554:8554"     # RTSP  (go2rtc)
+      - "8555:8555/tcp" # WebRTC TCP  (go2rtc)
+      - "8555:8555/udp" # WebRTC UDP  (go2rtc)
+
+    volumes:
+      - ./config:/config            # config.yml, frigate.db, model cache, TLS
+      - ./media:/media/frigate      # recordings, clips, exports
+      - /etc/localtime:/etc/localtime:ro
+
+    environment:
+      FRIGATE_JWT_SECRET: "change-me-in-production"
+      ARGUS_RUST_DISPATCHER: "1"    # route DB writes through Rust dispatcher
+      ARGUS_RUST_CLEANUP: "1"       # Rust owns retention + WAL truncation
+      # STORAGE_ENCRYPTION_KEY: ""  # uncomment to enable AES-256-GCM at-rest encryption
+      # PLUS_API_KEY: ""
+
+    depends_on:
+      - mqtt
+
+    # Uncomment for Google Coral USB:
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+
+    # Uncomment for Intel iGPU (VAAPI/QSV):
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - "109"   # render  (check: getent group render)
+    #   - "44"    # video
+
+  mqtt:
+    image: eclipse-mosquitto:2.0
+    container_name: mqtt-local
+    restart: unless-stopped
+    command: mosquitto -c /mosquitto-no-auth.conf
+    ports:
+      - "1883:1883"

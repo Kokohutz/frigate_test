@@ -1,8 +1,12 @@
 """Peewee migrations -- add webauthn_credentials table."""
 
+import peewee as pw
 
-def migrate_db(database):
-    database.execute_sql(
+SQL = pw.SQL
+
+
+def migrate(migrator, database, fake=False, **kwargs):
+    migrator.sql(
         """
         CREATE TABLE IF NOT EXISTS webauthn_credentials (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,5 +21,5 @@ def migrate_db(database):
     )
 
 
-def rollback(database):
-    database.execute_sql("DROP TABLE IF EXISTS webauthn_credentials")
+def rollback(migrator, database, fake=False, **kwargs):
+    migrator.sql("DROP TABLE IF EXISTS webauthn_credentials")

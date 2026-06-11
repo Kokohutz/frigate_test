@@ -2,9 +2,11 @@
 
 import peewee as pw
 
+SQL = pw.SQL
 
-def migrate_db(database):
-    database.execute_sql(
+
+def migrate(migrator, database, fake=False, **kwargs):
+    migrator.sql(
         """
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,5 +20,5 @@ def migrate_db(database):
     )
 
 
-def rollback(database):
-    database.execute_sql("DROP TABLE IF EXISTS audit_log")
+def rollback(migrator, database, fake=False, **kwargs):
+    migrator.sql("DROP TABLE IF EXISTS audit_log")

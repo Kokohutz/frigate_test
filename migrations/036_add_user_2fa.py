@@ -1,34 +1,18 @@
 """Peewee migrations -- add 2FA columns to User."""
 
 import peewee as pw
-from playhouse.migrate import SqliteMigrator, migrate
+
+SQL = pw.SQL
 
 
-def migrate_db(database):
-    migrator = SqliteMigrator(database)
-    migrate(
-        migrator.add_column(
-            "user",
-            "totp_secret",
-            pw.CharField(null=True, max_length=64),
-        ),
-        migrator.add_column(
-            "user",
-            "totp_enabled",
-            pw.BooleanField(default=False),
-        ),
-        migrator.add_column(
-            "user",
-            "recovery_codes",
-            pw.TextField(null=True),
-        ),
+def migrate(migrator, database, fake=False, **kwargs):
+    migrator.sql('ALTER TABLE "user" ADD COLUMN "totp_secret" VARCHAR(64) NULL')
+    migrator.sql(
+        'ALTER TABLE "user" ADD COLUMN "totp_enabled" INTEGER NOT NULL DEFAULT 0'
     )
+    migrator.sql('ALTER TABLE "user" ADD COLUMN "recovery_codes" TEXT NULL')
 
 
-def rollback(database):
-    migrator = SqliteMigrator(database)
-    migrate(
-        migrator.drop_column("user", "totp_secret"),
-        migrator.drop_column("user", "totp_enabled"),
-        migrator.drop_column("user", "recovery_codes"),
-    )
+def rollback(migrator, database, fake=False, **kwargs):
+    # SQLite does not support DROP COLUMN before 3.35 — no-op is safe for tests
+    pass

@@ -5,6 +5,7 @@ import TimeAgo from "@/components/dynamic/TimeAgo";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { isDesktop, isMobile } from "react-device-detect";
 import GeneralMetrics from "@/views/system/GeneralMetrics";
+import SystemHealthPanel from "@/views/system/SystemHealthPanel";
 import StorageMetrics from "@/views/system/StorageMetrics";
 import { LuActivity, LuHardDrive, LuSearchCode } from "react-icons/lu";
 import { FaVideo } from "react-icons/fa";
@@ -126,6 +127,7 @@ function System() {
           </div>
         )}
       </div>
+      <SystemHealthPanel />
       {visitedTabs.has("general") && (
         <div className={page == "general" ? "contents" : "hidden"}>
           <GeneralMetrics

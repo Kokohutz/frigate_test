@@ -31,6 +31,7 @@ from frigate.api import (
 )
 from frigate.api.auth import get_jwt_secret, limiter, require_admin_by_default
 from frigate.api.federation import router as federation_router
+from frigate.api.health import router as health_router
 from frigate.api.webauthn import router as webauthn_router
 from frigate.comms.dispatcher import Dispatcher
 from frigate.comms.event_metadata_updater import (
@@ -116,9 +117,34 @@ def create_fastapi_app(
             database.close()
         return response
 
+    # Expose the database on app.state so health checks can reach it without
+    # going through the request middleware (which opens/closes per-request).
+    app.state.database = database
+    app.state.health_checks = None
+    app.state.health_timestamp = None
+
     @app.on_event("startup")
     async def startup():
         logger.info("FastAPI started")
+        # Run startup checks asynchronously; cache result for /api/health/ready
+        try:
+            from frigate.startup_check import StartupChecker, overall_status
+
+            checker = StartupChecker(config=frigate_config, db=database)
+            raw = await checker.run_all()
+            checks = {name: result.as_dict() for name, result in raw.items()}
+            app.state.health_checks = checks
+            status = overall_status(checks)
+            if status == "critical":
+                failed = [k for k, v in checks.items() if v["status"] == "fail"]
+                logger.error("Startup checks FAILED — critical: %s", failed)
+            elif status == "degraded":
+                warned = [k for k, v in checks.items() if v["status"] == "warn"]
+                logger.warning("Startup checks DEGRADED — warnings: %s", warned)
+            else:
+                logger.info("Startup checks PASSED — all %d checks healthy", len(checks))
+        except Exception as exc:
+            logger.error("Startup check runner error: %s", exc)
 
     # Rate limiter (used for login endpoint)
     if frigate_config.auth.failed_login_rate_limit is None:
@@ -147,6 +173,7 @@ def create_fastapi_app(
     app.include_router(record.router)
     app.include_router(debug_replay.router)
     app.include_router(models.router)
+    app.include_router(health_router)
     app.include_router(webauthn_router)
     app.include_router(federation_router)
     # App Properties

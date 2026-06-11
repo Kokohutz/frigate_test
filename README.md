@@ -45,8 +45,9 @@ services:
     privileged: true
     shm_size: 256mb
     environment:
-      ARGUS_RUST_DISPATCHER: "1"     # route DB writes through Rust
-      ARGUS_RUST_CLEANUP: "1"        # let Rust own retention + WAL truncation
+      FRIGATE_RUST_DISPATCHER: "1"   # route DB writes through Rust comms-dispatcher
+      FRIGATE_RUST_CLEANUP: "1"     # let Rust own retention + WAL truncation
+      FRIGATE_RUST_RECORD: "1"      # let Rust own recording (storage-daemon)
       STORAGE_ENCRYPTION_KEY: ${ARGUS_AT_REST_KEY}
     devices:
       - /dev/bus/usb:/dev/bus/usb    # Coral USB
@@ -373,7 +374,7 @@ Roll back at any time by reverting the image and removing the two env vars. The 
 
 ## Running your local build
 
-To build the image from your working tree and start the full stack:
+`docker-compose.local.yml` builds your code from source and starts the full stack — all 6 Rust daemons, Python backend, web UI, nginx, MQTT, and go2rtc in one command.
 
 ```bash
 # First time only
@@ -381,17 +382,41 @@ mkdir -p config media
 cp config/config.yml.example config/config.yml
 # edit config/config.yml — add your cameras
 
-# Build from source and start everything
+# Build and start everything
 docker compose -f docker-compose.local.yml up --build
 ```
 
-- UI available at **http://localhost:5000** (or https://localhost:8971 for TLS)
-- Logs: `docker compose -f docker-compose.local.yml logs -f argus`
-- Rebuild after code changes: `docker compose -f docker-compose.local.yml up --build`
+**What starts inside the container (s6-overlay supervises all of these):**
+
+| Service | What it does |
+|---------|-------------|
+| `storage-daemon` | Recording maintenance + WAL cleanup |
+| `comms-dispatcher` | ZMQ REQ/REP → SQLite write handler |
+| `encrypted-storage` | AES-256-GCM / ChaCha20 at-rest encryption |
+| `tiered-storage` | Hot NVMe → cold HDD/NAS migration |
+| `event-router` | MQTT / webhook / Discord / Telegram / Slack |
+| `detection-bridge` | Multi-model ONNX inference chain |
+| `go2rtc` | RTSP re-streaming and WebRTC |
+| `nginx` | Reverse proxy — HTTP :5000, HTTPS :8971 |
+| `python (frigate)` | FastAPI, ZMQ orchestration, detectors |
+
+The Rust daemons start in parallel via s6 in ~15 ms; Python starts after go2rtc is healthy.
+
+```bash
+# Useful commands
+docker compose -f docker-compose.local.yml logs -f argus          # tail all logs
+docker compose -f docker-compose.local.yml logs -f storage-daemon # single service log
+docker compose -f docker-compose.local.yml up --build             # rebuild after code changes
+docker compose -f docker-compose.local.yml down                   # stop everything
+```
+
+- HTTP UI: **http://localhost:5000**
+- HTTPS UI: **https://localhost:8971** (self-signed cert)
+- RTSP: `rtsp://localhost:8554/<camera>`
 
 > The existing `docker-compose.yml` in the repo root is the **VS Code devcontainer**
-> (it runs `sleep infinity` — it does not start the app). Use `docker-compose.local.yml`
-> to run your own code.
+> (runs `sleep infinity`, does not start the app). Use `docker-compose.local.yml` to
+> run your code.
 
 ---
 

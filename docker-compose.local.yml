@@ -34,9 +34,10 @@ services:
 
     environment:
       FRIGATE_JWT_SECRET: "change-me-in-production"
-      ARGUS_RUST_DISPATCHER: "1"    # route DB writes through Rust dispatcher
-      ARGUS_RUST_CLEANUP: "1"       # Rust owns retention + WAL truncation
-      # STORAGE_ENCRYPTION_KEY: ""  # uncomment to enable AES-256-GCM at-rest encryption
+      FRIGATE_RUST_DISPATCHER: "1"  # route DB writes through Rust comms-dispatcher
+      FRIGATE_RUST_CLEANUP: "1"    # Rust owns retention + WAL truncation
+      FRIGATE_RUST_RECORD: "1"     # Rust owns recording (storage-daemon)
+      # STORAGE_ENCRYPTION_KEY: "" # uncomment to enable AES-256-GCM at-rest encryption
       # PLUS_API_KEY: ""
 
     depends_on:

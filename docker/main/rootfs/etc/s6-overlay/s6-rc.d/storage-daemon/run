@@ -1,0 +1,9 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+# Start the storage-daemon Rust daemon
+
+set -o errexit -o nounset -o pipefail
+
+exec 2>&1
+echo "[INFO] Starting storage-daemon..."
+exec /usr/local/bin/storage-daemon

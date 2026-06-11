@@ -39,24 +39,26 @@ C_MILESTONE = "#ff6e6e" # Milestone diamonds
 # ─── Cold-start Gantt data ───────────────────────────────────────────────────
 # (label, t_start_ms, t_end_ms, colour)
 GANTT = [
-    # Container bootstrap
-    ("docker run frigate-latest",           0,     25,   C_OS),
-    ("Container init (entrypoint.sh)",      25,   140,   C_OS),
-    ("nginx bind :5000",                   130,   190,   C_OS),
+    # Container bootstrap (docker compose up --build)
+    ("docker compose up --build",           0,     25,   C_OS),
+    ("Container init (s6-overlay)",         25,   140,   C_OS),
+    ("nginx bind :5000 / :8971",           130,   190,   C_OS),
 
-    # Python core
+    # s6 parallel launch: Rust daemons (via s6 services, all start at once)
+    ("s6: storage-daemon",                 140,   155,   C_RUST),
+    ("s6: comms-dispatcher",               140,   155,   C_RUST),
+    ("s6: tiered-storage",                 140,   156,   C_RUST),
+    ("s6: encrypted-storage",              140,   156,   C_RUST),
+    ("s6: event-router",                   140,   155,   C_RUST),
+    ("s6: detection-bridge",               140,   158,   C_RUST),
+
+    # Python core (starts after go2rtc, which starts after prepare)
     ("Peewee migrations check",            155,   310,   C_PY),
     ("ZMQ proxy_pub/proxy_sub bind",       160,   195,   C_PY),
     ("ZMQ comms-dispatcher",               195,   250,   C_PY),
-    ("Rust storage-daemon",                200,   215,   C_RUST),
-    ("Rust comms-dispatcher",              200,   215,   C_RUST),
-    ("Rust tiered-storage",                200,   216,   C_RUST),
-    ("Rust encrypted-storage",             200,   216,   C_RUST),
-    ("Rust event-router",                  200,   215,   C_RUST),
-    ("Rust detection-bridge",              200,   218,   C_RUST),
     ("FastAPI ready (app/config)",         290,   510,   C_PY),
 
-    # Startup self-checks (NEW)
+    # Startup self-checks
     ("FastAPI startup: self-checks (9×)",  510,   517,   C_HEALTH),
 
     # Web / detection
@@ -68,7 +70,7 @@ GANTT = [
 
 # Milestone diamonds (t_ms, label)
 MILESTONES = [
-    (215,  "Rust daemons\nready"),
+    (158,  "Rust daemons\nready (s6)"),
     (517,  "Startup checks\nPASSED"),
     (5900, "System\nREADY"),
 ]

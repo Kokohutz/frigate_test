@@ -11,6 +11,8 @@ import {
   MdCategory,
   MdChat,
   MdVideoLibrary,
+  MdDirectionsCar,
+  MdHub,
 } from "react-icons/md";
 import { TbFaceId } from "react-icons/tb";
 import useSWR from "swr";
@@ -25,6 +27,8 @@ export const ID_FACE_LIBRARY = 6;
 export const ID_CLASSIFICATION = 7;
 export const ID_CHAT = 8;
 export const ID_PIPELINE = 9;
+export const ID_LICENSE_PLATES = 10;
+export const ID_FEDERATION = 11;
 
 export default function useNavigation(
   variant: "primary" | "secondary" = "primary",
@@ -113,7 +117,23 @@ export default function useNavigation(
           url: "/pipeline",
           enabled: isDesktop && isAdmin,
         },
+        {
+          id: ID_LICENSE_PLATES,
+          variant,
+          icon: MdDirectionsCar,
+          title: "menu.licensePlates",
+          url: "/license-plates",
+          enabled: isDesktop && isAdmin && config?.lpr?.enabled,
+        },
+        {
+          id: ID_FEDERATION,
+          variant,
+          icon: MdHub,
+          title: "menu.federation",
+          url: "/federation",
+          enabled: isDesktop && isAdmin,
+        },
       ] as NavData[],
-    [config?.face_recognition?.enabled, hasChatAgent, variant, isAdmin],
+    [config?.face_recognition?.enabled, config?.lpr?.enabled, hasChatAgent, variant, isAdmin],
   );
 }

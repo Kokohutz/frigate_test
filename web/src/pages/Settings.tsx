@@ -59,6 +59,7 @@ import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useTranslation } from "react-i18next";
 import { useAllCameraOverrides } from "@/hooks/use-config-override";
 import TriggerView from "@/views/settings/TriggerView";
+import WebAuthnSettings from "@/views/settings/WebAuthnSettings";
 import { CameraNameLabel } from "@/components/camera/FriendlyNameLabel";
 import {
   Sidebar,
@@ -166,6 +167,7 @@ const allSettingsViews = [
   "debug",
   "users",
   "roles",
+  "webauthn",
   "notifications",
   "frigateplus",
   "mediaSync",
@@ -437,6 +439,7 @@ const settingsGroups = [
     items: [
       { key: "users", component: UsersView },
       { key: "roles", component: RolesView },
+      { key: "webauthn", component: WebAuthnSettings },
     ],
   },
   {

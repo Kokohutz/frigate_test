@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { isDesktop, isIOS, isMobileOnly, isSafari } from "react-device-detect";
 import useSWR from "swr";
 import { useApiHost } from "@/api";
@@ -23,6 +23,10 @@ import { FrigateConfig } from "@/types/frigateConfig";
 import { useTranslation } from "react-i18next";
 import { getTranslatedLabel } from "@/utils/i18n";
 import { LuSearchX } from "react-icons/lu";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
+import axios from "axios";
 
 type ExploreViewProps = {
   setSearchDetail: (search: SearchResult | undefined) => void;
@@ -41,6 +45,34 @@ export default function ExploreView({
   useEffect(() => {
     document.title = t("documentTitle");
   }, [t]);
+
+  // semantic search state
+  const [semanticQuery, setSemanticQuery] = useState("");
+  const [semanticResults, setSemanticResults] = useState<SearchResult[]>([]);
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleSemanticSearch = async () => {
+    const q = semanticQuery.trim();
+    if (!q) return;
+    setSemanticLoading(true);
+    try {
+      const resp = await axios.get<SearchResult[]>("search/semantic", {
+        params: { query: q, limit: 20 },
+      });
+      setSemanticResults(resp.data ?? []);
+    } catch {
+      setSemanticResults([]);
+    } finally {
+      setSemanticLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSemanticSearch();
+    }
+  };
 
   // data
 
@@ -98,6 +130,65 @@ export default function ExploreView({
 
   return (
     <div className="mx-2 space-y-4">
+      {/* Semantic search input */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            ref={inputRef}
+            className="pl-9"
+            placeholder="Semantic search… (e.g. 'person with red shirt')"
+            value={semanticQuery}
+            onChange={(e) => setSemanticQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleSemanticSearch}
+          disabled={semanticLoading || !semanticQuery.trim()}
+        >
+          {semanticLoading ? (
+            <ActivityIndicator className="size-4" />
+          ) : (
+            "Search"
+          )}
+        </Button>
+      </div>
+
+      {/* Semantic search results */}
+      {semanticQuery && !semanticLoading && semanticResults.length === 0 && (
+        <div className="rounded-lg bg-background_alt p-3 text-center text-sm text-muted-foreground">
+          No semantic results found for &ldquo;{semanticQuery}&rdquo;.
+        </div>
+      )}
+      {semanticResults.length > 0 && (
+        <div className="rounded-lg bg-background_alt p-2 md:px-4">
+          <div className="mb-1 flex flex-row items-center text-sm font-semibold">
+            Semantic Results
+            <span className="ml-2 text-xs text-muted-foreground">
+              ({semanticResults.length})
+            </span>
+          </div>
+          <div className="flex flex-row flex-wrap gap-2 py-2">
+            {semanticResults.map((event) => (
+              <div
+                key={event.id}
+                className="relative aspect-square h-auto max-w-[20%] flex-grow md:max-w-[10%]"
+              >
+                <ExploreThumbnailImage
+                  event={event}
+                  setSearchDetail={setSearchDetail}
+                  mutate={mutate}
+                  setSimilaritySearch={setSimilaritySearch}
+                  onSelectSearch={onSelectSearch}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {Object.entries(eventsByLabel).map(([label, filteredEvents]) => (
         <ThumbnailRow
           key={label}

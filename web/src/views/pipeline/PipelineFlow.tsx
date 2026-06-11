@@ -25,6 +25,8 @@ import { MqttNode } from "./nodes/MqttNode";
 import { StorageNode } from "./nodes/StorageNode";
 import { TieredStorageNode } from "./nodes/TieredStorageNode";
 import { EventRouterNode } from "./nodes/EventRouterNode";
+import { EncryptedStorageNode } from "./nodes/EncryptedStorageNode";
+import { AlertRulesNode } from "./nodes/AlertRulesNode";
 import { NodeEditSheet } from "./panels/NodeEditSheet";
 import { AddGenAIDialog } from "./panels/AddGenAIDialog";
 import { AddDetectorDialog } from "./panels/AddDetectorDialog";
@@ -40,6 +42,8 @@ const NODE_TYPES = {
   storage: StorageNode,
   tieredStorage: TieredStorageNode,
   eventRouter: EventRouterNode,
+  encryptedStorage: EncryptedStorageNode,
+  alertRules: AlertRulesNode,
 };
 
 export type PipelineNodeData = {
@@ -50,7 +54,9 @@ export type PipelineNodeData = {
     | "mqtt"
     | "storage"
     | "tieredStorage"
-    | "eventRouter";
+    | "eventRouter"
+    | "encryptedStorage"
+    | "alertRules";
   label: string;
   configKey: string;
   [key: string]: unknown;

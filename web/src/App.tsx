@@ -31,6 +31,8 @@ const Logs = lazy(() => import("@/pages/Logs"));
 const AccessDenied = lazy(() => import("@/pages/AccessDenied"));
 const Replay = lazy(() => import("@/pages/Replay"));
 const Pipeline = lazy(() => import("@/pages/Pipeline"));
+const LicensePlates = lazy(() => import("@/views/LicensePlatesView"));
+const FederatedDashboard = lazy(() => import("@/views/FederatedDashboard"));
 
 function App() {
   const { data: config } = useSWR<FrigateConfig>("config", {
@@ -106,6 +108,8 @@ function DefaultAppView() {
               <Route path="/pipeline" element={<Pipeline />} />
               <Route path="/playground" element={<UIPlayground />} />{" "}
               <Route path="/replay" element={<Replay />} />{" "}
+              <Route path="/license-plates" element={<LicensePlates />} />
+              <Route path="/federation" element={<FederatedDashboard />} />
             </Route>
             <Route path="/unauthorized" element={<AccessDenied />} />
             <Route path="*" element={<Redirect to="/" />} />

@@ -1,6 +1,7 @@
 import useSWR from "swr";
 import { FrigateStats, GpuInfo } from "@/types/stats";
 import { startTransition, useEffect, useMemo, useState } from "react";
+import SystemStatsLiveChart from "./SystemStatsLiveChart";
 import { useFrigateStats } from "@/api/ws";
 import {
   DetectorCpuThreshold,
@@ -1096,6 +1097,9 @@ export default function GeneralMetrics({
           )}
         </div>
       </div>
+
+      {/* Live real-time chart */}
+      <SystemStatsLiveChart />
     </>
   );
 }

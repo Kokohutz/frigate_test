@@ -31,8 +31,10 @@ from frigate.api.defs.tags import Tags
 from frigate.auth.totp import (
     generate_recovery_codes,
     generate_secret,
+    hash_recovery_code,
     provisioning_uri,
     verify_code,
+    verify_recovery_code,
 )
 from frigate.config import AuthConfig, NetworkingConfig, ProxyConfig
 from frigate.const import CONFIG_DIR, JWT_SECRET_ENV_VAR, PASSWORD_HASH_ALGORITHM
@@ -77,6 +79,12 @@ def require_admin_by_default():
         "/",
         "/version",
         "/config/schema.json",
+        # Public health probes (allow_public) — full /health is admin-gated
+        "/health/live",
+        "/health/ready",
+        # Pre-login WebAuthn passkey flow (own challenge-based auth)
+        "/auth/webauthn/auth/begin",
+        "/auth/webauthn/auth/complete",
         # Authenticated user endpoints (allow_any_authenticated)
         "/metrics",
         "/stats",
@@ -948,11 +956,12 @@ def login_2fa(request: Request, body: AppPost2FAVerifyBody):
     if len(code) == 6 and code.isdigit():
         ok = verify_code(secret, code)
 
-    # Fallback: try recovery code
+    # Fallback: try recovery code (compared against stored hashes)
     if not ok and "-" in code:
         existing = json.loads(getattr(db_user, "recovery_codes", None) or "[]")
-        if code in existing:
-            existing.remove(code)
+        matched = verify_recovery_code(code, existing)
+        if matched is not None:
+            existing.remove(matched)
             db_user.recovery_codes = json.dumps(existing)
             db_user.save()
             ok = True
@@ -1037,7 +1046,9 @@ def enable_2fa(request: Request, body: AppPost2FAEnableBody):
 
     recovery = generate_recovery_codes(10)
     db_user.totp_enabled = True
-    db_user.recovery_codes = json.dumps(recovery)
+    # Store only hashes; the plaintext codes are returned to the user once below
+    # and never persisted, so a DB compromise cannot reveal usable codes.
+    db_user.recovery_codes = json.dumps([hash_recovery_code(c) for c in recovery])
     db_user.save()
 
     try:

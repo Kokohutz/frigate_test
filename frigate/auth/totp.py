@@ -73,3 +73,26 @@ def generate_recovery_codes(n: int = 10) -> list[str]:
         raw = secrets.token_hex(6).upper()
         out.append(f"{raw[0:4]}-{raw[4:8]}-{raw[8:12]}")
     return out
+
+
+def hash_recovery_code(code: str) -> str:
+    """Hash a recovery code for at-rest storage.
+
+    Recovery codes are high-entropy (48 bits) so a single SHA-256 is sufficient
+    and avoids storing the plaintext. Normalises case/whitespace first so the
+    stored hash matches what verification computes.
+    """
+    normalized = code.strip().upper()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def verify_recovery_code(code: str, hashed_codes: list[str]) -> str | None:
+    """Return the matching stored hash if `code` is valid, else None.
+
+    Comparison is constant-time per candidate to avoid leaking which code matched.
+    """
+    candidate = hash_recovery_code(code)
+    for stored in hashed_codes:
+        if secrets.compare_digest(candidate, stored):
+            return stored
+    return None

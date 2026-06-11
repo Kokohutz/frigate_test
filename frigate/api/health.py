@@ -1,8 +1,16 @@
 """Health-check endpoints.
 
-GET /api/health/live  — liveness probe (always 200 if Python is up, no auth)
-GET /api/health/ready — readiness probe (200 when DB + config are OK, no auth)
-GET /api/health       — full diagnostic report (admin auth required)
+Routes are registered WITHOUT the /api prefix because nginx strips /api/ before
+proxying to the FastAPI app (see nginx.conf `location /api/`). External URLs are
+therefore /api/health/live etc.
+
+GET /health/live  — liveness probe (always 200 if Python is up, no auth)
+GET /health/ready — readiness probe (200 when DB + config are OK, no auth)
+GET /health       — full diagnostic report (admin auth required)
+
+The public probes must also be listed in EXEMPT_PATHS in frigate/api/auth.py —
+the app-level admin guard runs in addition to route dependencies, so allow_public
+alone does not make an endpoint reachable without admin.
 """
 
 import logging
@@ -11,7 +19,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from frigate.api.auth import allow_public
+from frigate.api.auth import allow_public, require_role
 from frigate.startup_check import StartupChecker, overall_status
 
 logger = logging.getLogger(__name__)
@@ -22,13 +30,13 @@ router = APIRouter(tags=["health"])
 _CRITICAL_KEYS = {"database", "config"}
 
 
-@router.get("/api/health/live", dependencies=[Depends(allow_public)])
+@router.get("/health/live", dependencies=[Depends(allow_public())])
 async def liveness():
     """Liveness probe — returns 200 as long as the Python process is running."""
     return {"status": "alive"}
 
 
-@router.get("/api/health/ready", dependencies=[Depends(allow_public)])
+@router.get("/health/ready", dependencies=[Depends(allow_public())])
 async def readiness(request: Request):
     """Readiness probe — returns 503 until critical checks have passed."""
     cached: dict | None = getattr(request.app.state, "health_checks", None)
@@ -46,7 +54,7 @@ async def readiness(request: Request):
     return {"status": "ready"}
 
 
-@router.get("/api/health")
+@router.get("/health", dependencies=[Depends(require_role(["admin"]))])
 async def health_check(request: Request):
     """Run all startup checks and return a detailed status report."""
     checker = StartupChecker(

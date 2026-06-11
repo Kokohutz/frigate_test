@@ -12,21 +12,47 @@ Flow:
                 POST /auth/webauthn/auth/complete → returns JWT (same as TOTP flow)
 """
 
+import base64
 import json
 import logging
+import secrets
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
+
+from frigate.api.auth import require_role
 
 router = APIRouter(prefix="/auth/webauthn", tags=["webauthn"])
 logger = logging.getLogger(__name__)
 
-# In-memory challenge store (per session — replace with Redis for multi-process)
+# In-memory challenge store (per session — replace with Redis for multi-process).
+# Bounded to avoid unbounded growth from an attacker flooding /auth/begin with
+# unique usernames; oldest pending challenges are evicted first.
+_MAX_PENDING_CHALLENGES = 1024
 _pending_challenges: dict[str, bytes] = {}
 
 
-class WebAuthnRegistrationBeginBody(BaseModel):
-    username: str
+def _store_challenge(key: str, challenge: bytes) -> None:
+    """Store a pending challenge, evicting the oldest if the store is full."""
+    if len(_pending_challenges) >= _MAX_PENDING_CHALLENGES:
+        # dict preserves insertion order; drop the oldest entry
+        oldest = next(iter(_pending_challenges))
+        _pending_challenges.pop(oldest, None)
+    _pending_challenges[key] = challenge
+
+
+def _credential_id_to_hex(raw_id: str) -> str:
+    """Decode a base64url WebAuthn credential id to the hex form we store."""
+    padded = raw_id + "=" * (-len(raw_id) % 4)
+    return base64.urlsafe_b64decode(padded).hex()
+
+
+def _authenticated_user(request: Request) -> str | None:
+    """Return the trusted username set by the /auth endpoint (never the body)."""
+    user = request.headers.get("remote-user")
+    if not user or user == "anonymous":
+        return None
+    return user
 
 
 class WebAuthnRegistrationCompleteBody(BaseModel):
@@ -44,9 +70,13 @@ class WebAuthnAuthCompleteBody(BaseModel):
     challenge_token: str  # the 2FA challenge token from /login
 
 
-@router.post("/register/begin")
-async def register_begin(body: WebAuthnRegistrationBeginBody, request: Request):
-    """Begin WebAuthn credential registration. Returns PublicKeyCredentialCreationOptions."""
+@router.post("/register/begin", dependencies=[Depends(require_role(["admin"]))])
+async def register_begin(request: Request):
+    """Begin WebAuthn credential registration. Returns PublicKeyCredentialCreationOptions.
+
+    The credential is always enrolled for the authenticated user (from the
+    trusted remote-user header), never a username supplied in the request body.
+    """
     try:
         import webauthn
         from webauthn.helpers.structs import (
@@ -58,6 +88,10 @@ async def register_begin(body: WebAuthnRegistrationBeginBody, request: Request):
             status_code=501,
             detail="webauthn package not installed. Run: pip install webauthn>=2.0.0",
         )
+
+    username = _authenticated_user(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     rp_id = (
         getattr(request.app.frigate_config.auth, "webauthn_rp_id", None)
@@ -71,17 +105,17 @@ async def register_begin(body: WebAuthnRegistrationBeginBody, request: Request):
     options = webauthn.generate_registration_options(
         rp_id=rp_id,
         rp_name=rp_name,
-        user_name=body.username,
-        user_display_name=body.username,
+        user_name=username,
+        user_display_name=username,
         authenticator_selection=AuthenticatorSelectionCriteria(
             user_verification=UserVerificationRequirement.PREFERRED,
         ),
     )
-    _pending_challenges[f"reg:{body.username}"] = options.challenge
+    _store_challenge(f"reg:{username}", options.challenge)
     return json.loads(webauthn.options_to_json(options))
 
 
-@router.post("/register/complete")
+@router.post("/register/complete", dependencies=[Depends(require_role(["admin"]))])
 async def register_complete(body: WebAuthnRegistrationCompleteBody, request: Request):
     """Complete registration and persist the WebAuthn credential."""
     try:
@@ -89,7 +123,11 @@ async def register_complete(body: WebAuthnRegistrationCompleteBody, request: Req
     except ImportError:
         raise HTTPException(status_code=501, detail="webauthn package not installed")
 
-    challenge = _pending_challenges.pop(f"reg:{body.username}", None)
+    username = _authenticated_user(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    challenge = _pending_challenges.pop(f"reg:{username}", None)
     if not challenge:
         raise HTTPException(status_code=400, detail="No pending registration challenge")
 
@@ -111,11 +149,11 @@ async def register_complete(body: WebAuthnRegistrationCompleteBody, request: Req
             status_code=400, detail=f"Registration verification failed: {e}"
         )
 
-    # Store credential in DB
+    # Store credential in DB for the authenticated user
     from frigate.models import WebAuthnCredential
 
     WebAuthnCredential.create(
-        username=body.username,
+        username=username,
         credential_id=verification.credential_id.hex(),
         public_key=verification.credential_public_key.hex(),
         sign_count=verification.sign_count,
@@ -157,7 +195,7 @@ async def auth_begin(body: WebAuthnAuthBeginBody, request: Request):
         allow_credentials=allow_credentials,
         user_verification=UserVerificationRequirement.PREFERRED,
     )
-    _pending_challenges[f"auth:{body.username}"] = options.challenge
+    _store_challenge(f"auth:{body.username}", options.challenge)
     return json.loads(webauthn.options_to_json(options))
 
 
@@ -179,17 +217,19 @@ async def auth_complete(
 
     from frigate.models import WebAuthnCredential
 
-    cred_id_hex = body.credential.get("id", "").replace("-", "+").replace("_", "/")
-    # Find matching credential
+    # Decode the client-supplied base64url credential id to the hex form we
+    # store, then match byte-for-byte (constant-time). A substring match would
+    # let a crafted id collide with the wrong stored credential.
+    try:
+        cred_id_hex = _credential_id_to_hex(body.credential.get("id", ""))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid credential id")
+
     creds = list(
         WebAuthnCredential.select().where(WebAuthnCredential.username == body.username)
     )
     matching = next(
-        (
-            c
-            for c in creds
-            if c.credential_id in cred_id_hex or cred_id_hex in c.credential_id
-        ),
+        (c for c in creds if secrets.compare_digest(c.credential_id, cred_id_hex)),
         None,
     )
     if not matching:
@@ -227,9 +267,11 @@ async def auth_complete(
     )
 
 
-@router.get("/credentials/{username}")
+@router.get(
+    "/credentials/{username}", dependencies=[Depends(require_role(["admin"]))]
+)
 async def list_credentials(username: str, request: Request):
-    """List registered WebAuthn credentials for a user."""
+    """List registered WebAuthn credentials for a user (admin only)."""
     from frigate.models import WebAuthnCredential
 
     creds = list(
@@ -245,16 +287,26 @@ async def list_credentials(username: str, request: Request):
     ]
 
 
-@router.delete("/credentials/{credential_id}")
+@router.delete(
+    "/credentials/{credential_id}", dependencies=[Depends(require_role(["admin"]))]
+)
 async def delete_credential(credential_id: int, request: Request):
-    """Delete a WebAuthn credential."""
+    """Delete a WebAuthn credential.
+
+    Admins may delete any credential; non-admins (should not reach here given the
+    admin dependency, but enforced defensively) may only delete their own.
+    """
     from frigate.models import WebAuthnCredential
 
-    deleted = (
-        WebAuthnCredential.delete()
-        .where(WebAuthnCredential.id == credential_id)
-        .execute()
-    )
-    if not deleted:
+    try:
+        cred = WebAuthnCredential.get_by_id(credential_id)
+    except Exception:
         raise HTTPException(status_code=404, detail="Credential not found")
+
+    requester = _authenticated_user(request)
+    role = request.headers.get("remote-role")
+    if role != "admin" and cred.username != requester:
+        raise HTTPException(status_code=403, detail="Not permitted")
+
+    cred.delete_instance()
     return {"status": "ok"}

@@ -18,11 +18,21 @@ services:
     container_name: argus-local
     restart: unless-stopped
     shm_size: "256mb"           # bump to 128 MB × num_cameras for 1080p feeds
-    privileged: true            # needed for /dev/bus/usb (Coral) + hardware accel
+
+    # NOTE: privileged is NOT enabled by default. It is only needed for direct
+    # hardware access (Coral USB, iGPU). Prefer the scoped `devices:` /
+    # `group_add:` blocks below. Uncomment only if you understand the risk.
+    # privileged: true
 
     ports:
-      - "5000:5000"     # HTTP  UI + API (no TLS)
-      - "8971:8971"     # HTTPS UI + API (self-signed cert)
+      # ⚠️  Port 5000 is the INTERNAL, UNAUTHENTICATED API. Any request that
+      #     reaches it is treated as `remote-role: admin` with no credentials
+      #     (see frigate/api/auth.py — the internal-port bypass). NEVER publish
+      #     it on a routable interface. It is intentionally NOT mapped here.
+      #     If you need the plain-HTTP API for local debugging, bind it to
+      #     loopback ONLY by uncommenting the next line:
+      # - "127.0.0.1:5000:5000"
+      - "8971:8971"     # HTTPS UI + API (auth-gated, self-signed cert)
       - "8554:8554"     # RTSP  (go2rtc)
       - "8555:8555/tcp" # WebRTC TCP  (go2rtc)
       - "8555:8555/udp" # WebRTC UDP  (go2rtc)
@@ -33,7 +43,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
     environment:
-      FRIGATE_JWT_SECRET: "change-me-in-production"
+      # Do NOT set FRIGATE_JWT_SECRET to a hardcoded value. When unset, Frigate
+      # generates a strong random secret on first boot and persists it to
+      # /config/.jwt_secret. Setting a known value here would let anyone forge
+      # admin JWTs. To pin a secret across hosts, use a Docker secret instead.
       FRIGATE_RUST_DISPATCHER: "1"  # route DB writes through Rust comms-dispatcher
       FRIGATE_RUST_CLEANUP: "1"    # Rust owns retention + WAL truncation
       FRIGATE_RUST_RECORD: "1"     # Rust owns recording (storage-daemon)
@@ -59,5 +72,9 @@ services:
     container_name: mqtt-local
     restart: unless-stopped
     command: mosquitto -c /mosquitto-no-auth.conf
+    # argus reaches the broker over the compose network as host "mqtt" — no host
+    # port mapping is needed. This broker runs with NO authentication, so it is
+    # bound to loopback only to avoid exposing an open broker on the LAN/Internet.
+    # Remove this block entirely unless you specifically need host access.
     ports:
-      - "1883:1883"
+      - "127.0.0.1:1883:1883"

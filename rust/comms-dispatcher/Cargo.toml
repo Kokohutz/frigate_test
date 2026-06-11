@@ -8,6 +8,7 @@ name = "comms-dispatcher"
 path = "src/main.rs"
 
 [dependencies]
+frigate-common = { path = "../common" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

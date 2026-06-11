@@ -20,6 +20,13 @@ use subscriber::spawn_event_subscriber;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Handle --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version") {
+        println!("event-router {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -28,6 +35,26 @@ async fn main() -> Result<()> {
         .init();
 
     info!("event-router starting");
+
+    let metrics = frigate_common::metrics::MetricsRegistry::new();
+    metrics.register_counter(
+        "event_router_events_received_total",
+        "Total events received from ZMQ",
+    );
+    metrics.register_counter(
+        "event_router_events_dispatched_total",
+        "Total events dispatched to sinks",
+    );
+    metrics.register_counter("event_router_events_dlq_total", "Total events sent to DLQ");
+    metrics.register_gauge(
+        "event_router_active_sinks",
+        "Number of currently enabled sinks",
+    );
+    let metrics_port: u16 = std::env::var("EVENT_ROUTER_METRICS_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(9095);
+    frigate_common::metrics::spawn_metrics_server(metrics.clone(), metrics_port).await;
 
     // ── Configuration from environment variables ──────────────────────────────
 

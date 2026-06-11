@@ -9,6 +9,10 @@ description = "Transparent AES-256-GCM / ChaCha20-Poly1305 encryption layer for 
 name = "encrypted-storage"
 path = "src/main.rs"
 
+[lib]
+name = "encrypted_storage"
+path = "src/lib.rs"
+
 [dependencies]
 frigate-common = { path = "../common" }
 tokio = { workspace = true }

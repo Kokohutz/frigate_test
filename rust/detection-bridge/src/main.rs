@@ -21,6 +21,13 @@ use tracing::info;
 use zmq_server::SOCKET_DETECTOR;
 
 fn main() -> Result<()> {
+    // Handle --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version") {
+        println!("detection-bridge {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

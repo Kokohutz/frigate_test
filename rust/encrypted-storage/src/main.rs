@@ -9,6 +9,13 @@ use tracing::{error, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Handle --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version") {
+        println!("encrypted-storage {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -36,6 +43,25 @@ async fn main() -> Result<()> {
     );
     let bind_addr =
         std::env::var("ENCRYPTED_STORAGE_BIND").unwrap_or_else(|_| "127.0.0.1:5002".to_string());
+
+    let metrics = frigate_common::metrics::MetricsRegistry::new();
+    metrics.register_counter(
+        "encrypted_storage_decrypt_requests_total",
+        "Total decrypt requests",
+    );
+    metrics.register_counter(
+        "encrypted_storage_encrypt_writes_total",
+        "Total files encrypted",
+    );
+    metrics.register_gauge(
+        "encrypted_storage_encrypted_files_total",
+        "Total encrypted files on disk",
+    );
+    let metrics_port: u16 = std::env::var("ENCRYPTED_STORAGE_METRICS_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(9093);
+    frigate_common::metrics::spawn_metrics_server(metrics.clone(), metrics_port).await;
 
     info!("encrypted-storage starting");
     info!("Record directory: {}", record_dir.display());

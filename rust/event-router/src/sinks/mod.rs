@@ -1,5 +1,6 @@
 pub mod discord;
 pub mod mqtt;
+pub mod s3;
 pub mod slack;
 pub mod telegram;
 pub mod webhook;

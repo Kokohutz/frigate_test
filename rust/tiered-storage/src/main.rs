@@ -8,12 +8,32 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Handle --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version") {
+        println!("tiered-storage {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "tiered_storage=info".into()),
         )
         .init();
+
+    let metrics = frigate_common::metrics::MetricsRegistry::new();
+    metrics.register_counter(
+        "tiered_storage_migrations_total",
+        "Total segment migrations hot→cold",
+    );
+    metrics.register_gauge("tiered_storage_hot_bytes", "Bytes currently in hot tier");
+    metrics.register_gauge("tiered_storage_cold_bytes", "Bytes currently in cold tier");
+    let metrics_port: u16 = std::env::var("TIERED_STORAGE_METRICS_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(9094);
+    frigate_common::metrics::spawn_metrics_server(metrics.clone(), metrics_port).await;
 
     // 1. Load tier config from YAML or env vars.
     let config_file = tiers::config_file_path();

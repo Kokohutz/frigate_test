@@ -320,6 +320,7 @@ name = "comms-dispatcher"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "frigate-common",
  "rusqlite",
  "serde",
  "serde_json",
@@ -687,7 +688,9 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
+ "zmq",
 ]
 
 [[package]]

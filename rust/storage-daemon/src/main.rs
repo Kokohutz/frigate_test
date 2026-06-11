@@ -45,6 +45,13 @@ const FRAME_RETENTION_SECS: f64 = 120.0;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Handle --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version") {
+        println!("storage-daemon {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -53,6 +60,25 @@ async fn main() -> Result<()> {
         .init();
 
     let config = Config::from_env();
+
+    let metrics = frigate_common::metrics::MetricsRegistry::new();
+    metrics.register_counter(
+        "storage_daemon_segments_scanned_total",
+        "Total recording segments scanned",
+    );
+    metrics.register_counter(
+        "storage_daemon_segments_inserted_total",
+        "Total segments inserted into DB",
+    );
+    metrics.register_gauge(
+        "storage_daemon_db_size_bytes",
+        "SQLite database file size in bytes",
+    );
+    let metrics_port: u16 = std::env::var("STORAGE_DAEMON_METRICS_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(9091);
+    frigate_common::metrics::spawn_metrics_server(metrics.clone(), metrics_port).await;
 
     if config.shadow_mode {
         info!(

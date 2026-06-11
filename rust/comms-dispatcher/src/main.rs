@@ -21,6 +21,13 @@ use tracing::info;
 ///                              Set to "" to disable forwarding entirely.
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Handle --version flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("--version") {
+        println!("comms-dispatcher {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -29,6 +36,22 @@ async fn main() -> Result<()> {
         .init();
 
     info!("comms-dispatcher starting");
+
+    let metrics = frigate_common::metrics::MetricsRegistry::new();
+    metrics.register_counter(
+        "comms_dispatcher_messages_total",
+        "Total messages dispatched",
+    );
+    metrics.register_counter("comms_dispatcher_db_writes_total", "Total SQLite writes");
+    metrics.register_gauge(
+        "comms_dispatcher_queue_depth",
+        "Current message queue depth",
+    );
+    let metrics_port: u16 = std::env::var("COMMS_DISPATCHER_METRICS_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(9092);
+    frigate_common::metrics::spawn_metrics_server(metrics.clone(), metrics_port).await;
 
     let db_path =
         std::env::var("FRIGATE_DB_PATH").unwrap_or_else(|_| "/config/frigate.db".to_string());

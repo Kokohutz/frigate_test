@@ -376,15 +376,32 @@ Roll back at any time by reverting the image and removing the two env vars. The 
 
 `docker-compose.local.yml` builds your code from source and starts the full stack — all 6 Rust daemons, Python backend, web UI, nginx, MQTT, and go2rtc in one command.
 
+**Complete walkthrough, from zero:**
+
 ```bash
-# First time only
+# 1. Clone and check out the development branch
+git clone https://github.com/kokohutz/frigate_test.git argus
+cd argus
+git checkout dev
+
+# 2. Create the config and data directories (compose mounts these)
 mkdir -p config media
 cp config/config.yml.example config/config.yml
-# edit config/config.yml — add your cameras
+# edit config/config.yml — add your cameras (the example uses a looping test video)
 
-# Build and start everything
-docker compose -f docker-compose.local.yml up --build
+# 3. Build the image from your source and start everything
+#    First build takes ~10–20 min (Rust workspace + web bundle + Python wheels);
+#    rebuilds are incremental and much faster.
+docker compose -f docker-compose.local.yml up --build -d
+
+# 4. Watch it come up
+docker compose -f docker-compose.local.yml logs -f argus
+# look for: "Startup checks" passing, then open the UI
 ```
+
+First-time login: username `admin`, password is printed once in the container log (`docker compose -f docker-compose.local.yml logs argus | grep -i password`).
+
+**Requirements:** Docker 24+ with the compose plugin and buildx. No local Rust, Node, or Python toolchains needed — everything builds inside the image.
 
 **What starts inside the container (s6-overlay supervises all of these):**
 
@@ -404,10 +421,11 @@ The Rust daemons start in parallel via s6 in ~15 ms; Python starts after go2rtc 
 
 ```bash
 # Useful commands
-docker compose -f docker-compose.local.yml logs -f argus          # tail all logs
-docker compose -f docker-compose.local.yml logs -f storage-daemon # single service log
-docker compose -f docker-compose.local.yml up --build             # rebuild after code changes
-docker compose -f docker-compose.local.yml down                   # stop everything
+docker compose -f docker-compose.local.yml logs -f argus              # tail all logs (merged)
+docker exec argus-local tail -f /dev/shm/logs/storage-daemon/current  # one daemon's log
+docker compose -f docker-compose.local.yml up --build -d              # rebuild after code changes
+docker compose -f docker-compose.local.yml down                       # stop everything
+curl -k https://localhost:8971/api/health/live                        # liveness probe
 ```
 
 - HTTP UI: **http://localhost:5000**

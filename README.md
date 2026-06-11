@@ -224,6 +224,7 @@ The `event-router` Rust daemon subscribes to `event/*` topics on the ZMQ proxy a
 | **Slack** | Incoming webhook | ✅ | None (URL is secret) |
 | **Telegram** | Bot API | ✅ | Bot token + chat ID |
 | **MQTT** | TCP/TLS | ✅ | Username/password |
+| **S3 / B2 / MinIO** | HTTP PUT (path-style) | ❌ | Access + secret key |
 
 All sinks share a global `governor` token-bucket rate limiter (default: 30/min). Messages that exceed the rate are written to a SQLite **dead-letter queue** and retried on the next successful send window.
 
@@ -269,7 +270,7 @@ Activation: set `STORAGE_ENCRYPTION_KEY` in the container environment. Zero code
 | `detection-bridge` | New. ONNX inference chain (primary YOLO → secondary on primary's boxes). Speaks the `zmq_ipc` detector wire protocol, zero Python changes to activate. | n/a (long-lived) |
 | `event-router` | New. Subscribes to `event/` topics, fans out to MQTT, webhooks, Discord, Telegram, Slack with `governor` rate-limiting and SQLite DLQ. | **15 ms** |
 
-All cargo tests pass — **68 tests across the workspace**, 0 clippy warnings (`cargo clippy --all-targets -- -D warnings`).
+All cargo tests pass — **98 tests across the workspace**, 0 clippy warnings (`cargo clippy --all-targets -- -D warnings`).
 
 ---
 
@@ -373,7 +374,7 @@ Roll back at any time by reverting the image and removing the two env vars. The 
 ```bash
 cd rust
 cargo build --release --all     # all 6 crates, ~2 min on 8 cores
-cargo test --all                # 68 tests
+cargo test --all                # 98 tests
 cargo clippy --all-targets -- -D warnings
 ```
 
@@ -429,6 +430,13 @@ event_router:
     telegram:
       bot_token: !env TG_TOKEN
       chat_id:   !env TG_CHAT
+  sinks_extra:
+    s3:
+      endpoint: https://s3.us-east-1.amazonaws.com   # or B2/MinIO
+      bucket: argus-recordings-backup
+      prefix: site-a/
+      access_key: !env S3_ACCESS_KEY
+      secret_key: !env S3_SECRET_KEY
   rate_limit: { per_minute: 10, burst: 3 }
 ```
 
@@ -444,6 +452,11 @@ event_router:
 | ✅ | Rust tiered-storage (hot/cold) |
 | ✅ | Rust event-router (MQTT/Discord/Slack/Telegram/webhook) |
 | ✅ | Rust detection-bridge (multi-model chain) |
+| ✅ | Rust: ZMQ retry + Prometheus metrics on all 6 daemons |
+| ✅ | Rust: per-deployment Argon2id KDF salt (random, file-backed) |
+| ✅ | Rust: real ONNX inference in detection-bridge (`with-onnx` feature) |
+| ✅ | Rust: S3/B2/MinIO backup sink in event-router |
+| ✅ | Rust: encrypted-storage integration tests (AES-GCM + ChaCha20) |
 | ✅ | Anthropic/GLM/Qwen GenAI providers |
 | ✅ | Z.AI provider (api.z.ai coding endpoint with `thinking` mode) |
 | ✅ | Visual pipeline editor (React Flow) |
@@ -454,9 +467,20 @@ event_router:
 | ✅ | Mobile-responsive pipeline (no minimap, compact toolbar) |
 | ✅ | Local / Offline Mode toggle (greys out cloud AI settings) |
 | ✅ | Built-in model converter (PyTorch / TF / Keras / ONNX → device format) |
+| ✅ | `StorageTiersConfig` + `EventRouterConfig` round-trip through `config.yml` |
+| ✅ | Audit log (SQLite `audit_log` table, migration 037) |
+| ✅ | `argus` CLI — `users`, `audit tail`, `config validate`, `export events` |
+| ✅ | WebAuthn / passkey login (FIDO2 registration + authentication API) |
+| ✅ | WebAuthn enrollment UI (passkey table, add/delete) |
+| ✅ | Federated multi-site dashboard (hub API + React card grid, SWR 30s refresh) |
+| ✅ | EncryptedStorageNode + AlertRulesNode in pipeline editor |
+| ✅ | LicensePlatesView (plate log + allow/block lists) |
+| ✅ | Semantic search bar in ExploreView |
+| ✅ | Live system-stats chart (recharts, 2 s poll, 60-point ring buffer) |
+| ✅ | `SECURITY.md` — responsible disclosure policy |
 | 🚧 | Synaptics SL1680 YOLO support (currently SSD only) |
-| 🔭 | WebAuthn / hardware security keys |
-| 🔭 | Federated multi-site dashboard |
+| 🔭 | HA integration plugin (MQTT discovery auto-config) |
+| 🔭 | Sub-stream auto-switching (hi-res detect → lo-res record) |
 
 ---
 

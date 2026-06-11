@@ -241,14 +241,16 @@ WORKDIR /build/rust
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     --mount=type=cache,target=/build/rust/target \
-    cargo build --release --all 2>&1 | tail -5
+    . "$HOME/.cargo/env" \
+    && cargo build --release --all 2>&1 | tail -5
 
 # Phase 2: copy real sources and rebuild (only changed crates recompile)
 COPY rust/ /build/rust/
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     --mount=type=cache,target=/build/rust/target \
-    cargo build --release --all \
+    . "$HOME/.cargo/env" \
+    && cargo build --release --all \
     && install -m 755 target/release/storage-daemon /usr/local/bin/storage-daemon \
     && install -m 755 target/release/encrypted-storage /usr/local/bin/encrypted-storage \
     && install -m 755 target/release/tiered-storage /usr/local/bin/tiered-storage \

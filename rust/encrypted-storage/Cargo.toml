@@ -2,7 +2,7 @@
 name = "encrypted-storage"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.88"
 description = "Transparent AES-256-GCM / ChaCha20-Poly1305 encryption layer for Frigate recordings"
 
 [[bin]]

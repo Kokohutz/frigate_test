@@ -100,7 +100,7 @@ cargo test --all -- --nocapture   # with stdout
 ```
 
 ### MSRV
-**Minimum Supported Rust Version: 1.82.0** (edition 2021)
+**Minimum Supported Rust Version: 1.88.0** (edition 2021; several locked dependencies are edition 2024 and require rustc ≥1.88)
 
 ### Crate Overview
 

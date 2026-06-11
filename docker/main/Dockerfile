@@ -208,15 +208,23 @@ RUN --mount=type=bind,source=docker/main/install_hailort.sh,target=/deps/install
 # Two-phase build: compile deps first (cacheable), then real sources.
 FROM base AS rust-builder
 ARG DEBIAN_FRONTEND
-ARG RUST_VERSION=1.82.0
+ARG RUST_VERSION=1.88.0
 
+# libzmq3-dev/libssl-dev are NOT needed: zmq-sys always builds libzmq from
+# vendored source (static link, no runtime .so in the final image), and TLS
+# goes through rustls. build-essential provides the C/C++ toolchain zeromq-src
+# compiles with.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl build-essential pkg-config libssl-dev libzmq3-dev \
+    curl build-essential pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust via rustup (non-interactive)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-    sh -s -- -y --default-toolchain ${RUST_VERSION} --profile minimal
+# Install Rust via rustup (non-interactive). Download to a file first — a
+# `curl | sh` pipe exits 0 even when curl fails, which caches a broken layer
+# with no toolchain installed.
+RUN curl --proto '=https' --tlsv1.2 -sSf -o /tmp/rustup-init.sh https://sh.rustup.rs \
+    && sh /tmp/rustup-init.sh -y --default-toolchain ${RUST_VERSION} --profile minimal \
+    && rm /tmp/rustup-init.sh \
+    && /root/.cargo/bin/cargo --version
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Phase 1: cache dependency compilation using stub sources
@@ -229,28 +237,34 @@ COPY rust/detection-bridge/Cargo.toml /build/rust/detection-bridge/
 COPY rust/event-router/Cargo.toml /build/rust/event-router/
 COPY rust/comms-dispatcher/Cargo.toml /build/rust/comms-dispatcher/
 
-# Create stub sources so Cargo can resolve and pre-compile all dependencies
+# Create stub sources so Cargo can resolve and pre-compile all dependencies.
+# Every target declared in the Cargo.tomls needs a stub file: all six daemons
+# have a bin target, and encrypted-storage additionally declares [lib].
 RUN mkdir -p /build/rust/common/src \
     && echo "pub fn stub() {}" > /build/rust/common/src/lib.rs \
     && for crate in storage-daemon encrypted-storage tiered-storage detection-bridge event-router comms-dispatcher; do \
        mkdir -p /build/rust/$crate/src \
        && echo "fn main() {}" > /build/rust/$crate/src/main.rs; \
-    done
+    done \
+    && echo "pub fn stub() {}" > /build/rust/encrypted-storage/src/lib.rs
 
 WORKDIR /build/rust
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     --mount=type=cache,target=/build/rust/target \
     export PATH="/root/.cargo/bin:$PATH" \
-    && cargo build --release --all 2>&1 | tail -5
+    && cargo build --release --workspace
 
-# Phase 2: copy real sources and rebuild (only changed crates recompile)
+# Phase 2: copy real sources and rebuild (only changed crates recompile).
+# Touch the sources so their mtimes are newer than the stub build artifacts —
+# otherwise cargo can skip recompiling and ship the empty stub binaries.
 COPY rust/ /build/rust/
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
     --mount=type=cache,target=/build/rust/target \
     export PATH="/root/.cargo/bin:$PATH" \
-    && cargo build --release --all \
+    && find /build/rust -name target -prune -o -name '*.rs' -exec touch {} + \
+    && cargo build --release --workspace \
     && install -m 755 target/release/storage-daemon /usr/local/bin/storage-daemon \
     && install -m 755 target/release/encrypted-storage /usr/local/bin/encrypted-storage \
     && install -m 755 target/release/tiered-storage /usr/local/bin/tiered-storage \

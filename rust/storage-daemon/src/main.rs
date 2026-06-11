@@ -227,7 +227,7 @@ async fn main() -> Result<()> {
 
                 // Retention sweep hourly (every 60 iterations × 60s)
                 wal_counter += 1;
-                if wal_counter % 60 == 0 {
+                if wal_counter.is_multiple_of(60) {
                     if let Err(e) = expire_recordings(&conn, &cameras, &retention_cfg).await {
                         warn!("Retention sweep failed: {e}");
                     }

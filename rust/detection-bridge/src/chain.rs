@@ -34,7 +34,6 @@ impl From<Detection> for [f32; 6] {
 /// A stub inference chain. Returns empty detections.
 /// Real inference is behind `with-onnx` feature in ort_runner.rs.
 pub struct InferenceChain {
-    #[allow(dead_code)]
     pub model_paths: Vec<PathBuf>,
 }
 
@@ -43,14 +42,11 @@ impl InferenceChain {
         Self { model_paths }
     }
 
-    /// Run inference. In stub mode (no ort), always returns empty vec.
+    /// Run inference. In stub mode (no ort), logs a warning and returns empty vec.
     /// With with-onnx feature: runs first model on tensor, returns results.
-    pub fn infer(&self, _width: u32, _height: u32, _tensor: &[u8]) -> Result<Vec<Detection>> {
-        #[cfg(feature = "with-onnx")]
-        {
-            if let Some(model_path) = self.model_paths.first() {
-                return crate::ort_runner::ort_impl::run_onnx(model_path, _tensor, _width, _height);
-            }
+    pub fn infer(&self, width: u32, height: u32, tensor: &[u8]) -> Result<Vec<Detection>> {
+        if let Some(model_path) = self.model_paths.first() {
+            return crate::ort_runner::ort_impl::run_onnx(model_path, tensor, width, height);
         }
 
         Ok(vec![])

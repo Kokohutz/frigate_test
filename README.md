@@ -395,10 +395,39 @@ npm run build                   # production bundle
 
 ### Python backend
 
+**Docker image (production)**
+
 ```bash
 make local                      # full Docker build, amd64
 make arm64                      # ARM build (Raspberry Pi 5, Jetson)
 ```
+
+**Local development (no Docker needed)**
+
+Requirements: Python 3.11+, pip.
+
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Symlink label maps expected at /
+sudo ln -sf $(pwd)/labelmap.txt /labelmap.txt
+sudo ln -sf $(pwd)/audio-labelmap.txt /audio-labelmap.txt
+
+# Run the test suite (485 tests)
+PYTHONPATH=$(pwd) python3 -u -m unittest discover -s frigate/test -p "test_*.py"
+
+# Type-check
+python3 -m mypy --config-file frigate/mypy.ini frigate
+
+# Format + lint
+ruff format frigate/
+ruff check frigate/
+```
+
+> Hardware-accelerated detector packages (`tflite_runtime`, `ai_edge_litert`,
+> `openvino`, etc.) are only needed inside Docker. The test suite stubs them
+> automatically; local CPU inference uses the `cpu` detector type.
 
 ---
 

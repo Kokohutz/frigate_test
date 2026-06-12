@@ -69,7 +69,7 @@ def create_fastapi_app(
     database: SqliteQueueDatabase,
     embeddings: Optional[EmbeddingsContext],
     detected_frames_processor,
-    storage_maintainer: StorageMaintainer,
+    storage_maintainer: Optional[StorageMaintainer],
     onvif: OnvifController,
     stats_emitter: StatsEmitter,
     event_metadata_updater: EventMetadataPublisher,

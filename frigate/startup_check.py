@@ -16,13 +16,16 @@ from frigate.const import CACHE_DIR, RECORD_DIR  # noqa: E402 — after stdlib
 
 logger = logging.getLogger(__name__)
 
-# Metrics ports match the defaults in each Rust binary's main.rs
-RUST_DAEMON_PORTS: dict[str, int] = {
-    "rust_storage_daemon": 9091,
-    "rust_comms_dispatcher": 9092,
-    "rust_encrypted_storage": 9093,
-    "rust_tiered_storage": 9094,
-    "rust_event_router": 9095,
+# Mapping: check-key → (metrics port, env-var that enables the daemon).
+# A daemon only runs when its env-var is set (non-empty / "1"); the probe
+# is skipped and reported as "disabled" otherwise so it never shows up as
+# a critical failure for optional/unconfigured daemons.
+RUST_DAEMON_PORTS: dict[str, tuple[int, str]] = {
+    "rust_storage_daemon":    (9091, "FRIGATE_RUST_RECORD"),
+    "rust_comms_dispatcher":  (9092, "FRIGATE_RUST_DISPATCHER"),
+    "rust_encrypted_storage": (9093, "STORAGE_ENCRYPTION_KEY"),
+    "rust_tiered_storage":    (9094, "COLD_PATH"),
+    "rust_event_router":      (9095, "FRIGATE_RUST_EVENT_ROUTER"),
 }
 
 # Timeout for Rust daemon TCP probe (seconds)
@@ -189,11 +192,17 @@ class StartupChecker:
                     cold.path, "cold tier"
                 )
 
-        # --- Rust daemon probes (concurrent) ---
-        daemon_tasks = [
-            (key, asyncio.ensure_future(self.check_rust_daemon(key, port)))
-            for key, port in RUST_DAEMON_PORTS.items()
-        ]
+        # --- Rust daemon probes (concurrent, skipped when daemon not enabled) ---
+        daemon_tasks = []
+        for key, (port, env_var) in RUST_DAEMON_PORTS.items():
+            if not os.environ.get(env_var):
+                results[key] = CheckResult(
+                    CheckStatus.PASS, "disabled (not configured)", 0
+                )
+                continue
+            daemon_tasks.append(
+                (key, asyncio.create_task(self.check_rust_daemon(key, port)))
+            )
         for key, task in daemon_tasks:
             results[key] = await task
 

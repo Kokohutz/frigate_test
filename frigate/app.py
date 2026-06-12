@@ -121,6 +121,10 @@ class FrigateApp:
         self.ptz_metrics: dict[str, PTZMetrics] = {}
         self.processes: dict[str, int] = {}
         self.embeddings: Optional[EmbeddingsContext] = None
+        # May stay None when FRIGATE_RUST_RECORD/CLEANUP=1
+        self.recording_process: Optional[FrigateProcess] = None
+        self.storage_maintainer: Optional[StorageMaintainer] = None
+        self.record_cleanup: Optional[RecordingCleanup] = None
         self.profile_manager: Optional[ProfileManager] = None
         self.config = config
 
@@ -530,18 +534,17 @@ class FrigateApp:
         ]
 
         for attr, key, factory in specs:
-            if not hasattr(self, attr):
+            proc = getattr(self, attr, None)
+            if proc is None:
                 continue
 
             def on_restart(
-                proc: FrigateProcess, _attr: str = attr, _key: str = key
+                p: FrigateProcess, _attr: str = attr, _key: str = key
             ) -> None:
-                setattr(self, _attr, proc)
-                self.processes[_key] = proc.pid or 0
+                setattr(self, _attr, p)
+                self.processes[_key] = p.pid or 0
 
-            self.frigate_watchdog.register(
-                key, getattr(self, attr), factory, on_restart
-            )
+            self.frigate_watchdog.register(key, proc, factory, on_restart)
 
         self.frigate_watchdog.start()
 
@@ -710,8 +713,9 @@ class FrigateApp:
         self.output_processor.terminate()
         self.output_processor.join()
 
-        self.recording_process.terminate()
-        self.recording_process.join()
+        if self.recording_process is not None:
+            self.recording_process.terminate()
+            self.recording_process.join()
 
         self.review_segment_process.terminate()
         self.review_segment_process.join()
@@ -720,7 +724,8 @@ class FrigateApp:
         self.ptz_autotracker_thread.join()
 
         self.event_cleanup.join()
-        self.record_cleanup.join()
+        if self.record_cleanup is not None:
+            self.record_cleanup.join()
         self.stats_emitter.join()
         self.frigate_watchdog.join()
         self.camera_maintainer.join()

@@ -46,6 +46,9 @@ def get_recordings_storage_usage(request: Request):
 
     total_mb = recording_stats["total"]
 
+    if request.app.storage_maintainer is None:
+        return JSONResponse({})
+
     camera_usages: dict[str, dict] = (
         request.app.storage_maintainer.calculate_camera_usages()
     )

@@ -215,7 +215,7 @@ ARG RUST_VERSION=1.88.0
 # goes through rustls. build-essential provides the C/C++ toolchain zeromq-src
 # compiles with.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl build-essential pkg-config \
+    curl ca-certificates build-essential pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust via rustup (non-interactive). Download to a file first — a

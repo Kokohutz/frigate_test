@@ -4,7 +4,18 @@
 
 set -o errexit -o nounset -o pipefail
 
-dirs=(/dev/shm/logs/frigate /dev/shm/logs/go2rtc /dev/shm/logs/nginx /dev/shm/logs/certsync)
+dirs=(
+    /dev/shm/logs/frigate
+    /dev/shm/logs/go2rtc
+    /dev/shm/logs/nginx
+    /dev/shm/logs/certsync
+    /dev/shm/logs/storage-daemon
+    /dev/shm/logs/comms-dispatcher
+    /dev/shm/logs/encrypted-storage
+    /dev/shm/logs/tiered-storage
+    /dev/shm/logs/detection-bridge
+    /dev/shm/logs/event-router
+)
 
 mkdir -p "${dirs[@]}"
 chown nobody:nogroup "${dirs[@]}"

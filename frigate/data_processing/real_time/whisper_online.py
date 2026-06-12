@@ -14,7 +14,7 @@ import soundfile as sf
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(10**6)
+@lru_cache(maxsize=128)
 def load_audio(fname):
     a, _ = librosa.load(fname, sr=16000, dtype=np.float32)
     return a

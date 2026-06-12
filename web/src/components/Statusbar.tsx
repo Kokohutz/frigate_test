@@ -37,6 +37,30 @@ export default function Statusbar() {
     return parseInt(systemCpu);
   }, [stats]);
 
+  const memPercent = useMemo(() => {
+    const systemMem = stats?.cpu_usages["frigate.full_system"]?.mem;
+    if (!systemMem) return null;
+    return parseInt(systemMem);
+  }, [stats]);
+
+  const storageInfo = useMemo(() => {
+    const recordings = stats?.service?.storage?.["/media/frigate/recordings"];
+    if (!recordings) return null;
+    const usedPct = recordings.total > 0
+      ? Math.round((recordings.used / recordings.total) * 100)
+      : 0;
+    const freeGb = (recordings.free / 1024).toFixed(0);
+    return { usedPct, freeGb };
+  }, [stats]);
+
+  const uptimeStr = useMemo(() => {
+    const sec = stats?.service?.uptime;
+    if (!sec) return null;
+    if (sec < 3600) return `${Math.floor(sec / 60)}m`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+    return `${Math.floor(sec / 86400)}d ${Math.floor((sec % 86400) / 3600)}h`;
+  }, [stats]);
+
   const { potentialProblems } = useStats(stats);
 
   useEffect(() => {
@@ -107,6 +131,43 @@ export default function Statusbar() {
               CPU {cpuPercent}%
             </div>
           </Link>
+        )}
+        {memPercent !== null && (
+          <Link to="/system#general">
+            <div className="flex cursor-pointer items-center gap-2 text-sm hover:underline">
+              <MdCircle
+                className={`size-2 ${
+                  memPercent < 60
+                    ? "text-success"
+                    : memPercent < 85
+                      ? "text-orange-400"
+                      : "text-danger"
+                }`}
+              />
+              RAM {memPercent}%
+            </div>
+          </Link>
+        )}
+        {storageInfo !== null && (
+          <Link to="/system#storage">
+            <div className="flex cursor-pointer items-center gap-2 text-sm hover:underline">
+              <MdCircle
+                className={`size-2 ${
+                  storageInfo.usedPct < 70
+                    ? "text-success"
+                    : storageInfo.usedPct < 90
+                      ? "text-orange-400"
+                      : "text-danger"
+                }`}
+              />
+              Disk {storageInfo.usedPct}% ({storageInfo.freeGb}GB free)
+            </div>
+          </Link>
+        )}
+        {uptimeStr && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            ↑ {uptimeStr}
+          </div>
         )}
         {Object.entries(stats?.gpu_usages || {}).map(([name, stats]) => {
           if (name == "error-gpu") {

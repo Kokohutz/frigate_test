@@ -37,7 +37,7 @@ import {
 import useSWR from "swr";
 import DraggableGridLayout from "./DraggableGridLayout";
 import { IoClose } from "react-icons/io5";
-import { LuLayoutDashboard } from "react-icons/lu";
+import { LuLayoutDashboard, LuPlus, LuSettings } from "react-icons/lu";
 import { cn } from "@/lib/utils";
 import {
   AudioState,
@@ -46,6 +46,15 @@ import {
   VolumeState,
 } from "@/types/live";
 import { FaCompress, FaExpand } from "react-icons/fa";
+import { HiTrash } from "react-icons/hi";
+import CameraWizardDialog from "@/components/settings/CameraWizardDialog";
+import DeleteCameraDialog from "@/components/overlay/dialog/DeleteCameraDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import useCameraLiveMode from "@/hooks/use-camera-live-mode";
 import { useResizeObserver } from "@/hooks/resize-observer";
 import LiveContextMenu from "@/components/menu/LiveContextMenu";
@@ -82,6 +91,10 @@ export default function LiveDashboardView({
     "live-layout",
     isDesktop ? "grid" : "list",
   );
+
+  const isAdmin = useIsAdmin();
+  const [showAddCamera, setShowAddCamera] = useState(false);
+  const [showDeleteCamera, setShowDeleteCamera] = useState(false);
 
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -397,6 +410,22 @@ export default function LiveDashboardView({
       className="scrollbar-container size-full select-none overflow-y-auto px-1 pt-2 md:p-2"
       ref={containerRef}
     >
+      {isAdmin && (
+        <>
+          <CameraWizardDialog
+            open={showAddCamera}
+            onClose={() => setShowAddCamera(false)}
+          />
+          <DeleteCameraDialog
+            show={showDeleteCamera}
+            cameras={cameras.map((c) => c.name)}
+            onClose={() => setShowDeleteCamera(false)}
+            onDeleted={() => {
+              setShowDeleteCamera(false);
+            }}
+          />
+        </>
+      )}
       {isMobile && (
         <div className="relative flex h-11 items-center justify-between">
           <Logo className="absolute inset-x-1/2 h-8 -translate-x-1/2" />
@@ -624,6 +653,34 @@ export default function LiveDashboardView({
                     "z-50 flex flex-row gap-2",
                   )}
                 >
+                  {isAdmin && !fullscreen && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <div className="cursor-pointer rounded-lg bg-secondary text-secondary-foreground opacity-60 transition-all duration-300 hover:bg-muted hover:opacity-100">
+                          <LuSettings className="size-5 md:m-[6px]" />
+                        </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" side="top">
+                        <DropdownMenuItem
+                          onClick={() => setShowAddCamera(true)}
+                        >
+                          <LuPlus className="mr-2 size-4" />
+                          {t("cameraManagement.addCamera", {
+                            ns: "views/settings",
+                          })}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setShowDeleteCamera(true)}
+                          className="text-destructive"
+                        >
+                          <HiTrash className="mr-2 size-4" />
+                          {t("cameraManagement.deleteCamera", {
+                            ns: "views/settings",
+                          })}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div

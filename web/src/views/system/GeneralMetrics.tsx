@@ -1,5 +1,6 @@
 import useSWR from "swr";
 import { FrigateStats, GpuInfo } from "@/types/stats";
+import { FrigateConfig } from "@/types/frigateConfig";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import SystemStatsLiveChart from "./SystemStatsLiveChart";
 import { useFrigateStats } from "@/api/ws";
@@ -37,6 +38,9 @@ export default function GeneralMetrics({
   // extra info
   const { t } = useTranslation(["views/system"]);
   const [showVainfo, setShowVainfo] = useState(false);
+
+  // config
+  const { data: config } = useSWR<FrigateConfig>("config");
 
   // stats
 
@@ -667,6 +671,158 @@ export default function GeneralMetrics({
       />
 
       <div className="scrollbar-container mt-4 flex size-full flex-col overflow-y-auto">
+        {config && (
+          <>
+            <div className="text-sm font-medium text-muted-foreground">
+              {t("general.servicesAndModels")}
+            </div>
+            <div className="mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {/* Detection Model */}
+              <div className="rounded-lg bg-background_alt p-2.5 md:rounded-2xl">
+                <div className="mb-3 text-sm font-medium">{t("general.detectionModel")}</div>
+                <div className="space-y-1.5 text-sm">
+                  {Object.entries(config.detectors).map(([name, detector]) => (
+                    <div key={name} className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{name}</span>
+                      <span className="rounded bg-secondary px-1.5 py-0.5 text-xs font-medium">
+                        {detector.type}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="mt-2 border-t border-secondary pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{t("general.modelPath")}</span>
+                      <span className="max-w-[180px] truncate text-xs" title={config.model.path || "/cpu_model.tflite"}>
+                        {config.model.path || "/cpu_model.tflite"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{t("general.modelSize")}</span>
+                      <span className="text-xs">{config.model.width}×{config.model.height}</span>
+                    </div>
+                    {config.model.plus && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Frigate+</span>
+                        <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs font-medium text-blue-400">
+                          {config.model.plus.baseModel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Semantic Search / Embeddings */}
+              <div className="rounded-lg bg-background_alt p-2.5 md:rounded-2xl">
+                <div className="mb-3 text-sm font-medium">{t("general.aiServices")}</div>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("general.semanticSearch")}</span>
+                    {config.semantic_search?.enabled ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="text-xs">
+                          {config.semantic_search.model} ({config.semantic_search.model_size})
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{t("general.disabled")}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("general.faceRecognition")}</span>
+                    {config.face_recognition?.enabled ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="text-xs">{config.face_recognition.model_size}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{t("general.disabled")}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("general.lpr")}</span>
+                    {config.lpr?.enabled ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="text-xs">{t("general.enabled")}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{t("general.disabled")}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* System Services */}
+              <div className="rounded-lg bg-background_alt p-2.5 md:rounded-2xl">
+                <div className="mb-3 text-sm font-medium">{t("general.systemServices")}</div>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">go2rtc</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-success" />
+                      <span className="text-xs">{t("general.running")}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">MQTT</span>
+                    {config.mqtt?.enabled ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="text-xs">{t("general.enabled")}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{t("general.disabled")}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("general.birdseye")}</span>
+                    {config.birdseye?.enabled ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="text-xs">{t("general.enabled")}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{t("general.disabled")}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">{t("general.notifications")}</span>
+                    {config.notifications?.enabled ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-success" />
+                        <span className="text-xs">{t("general.enabled")}</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2 rounded-full bg-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">{t("general.disabled")}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="mb-2" />
+          </>
+        )}
+
         <div className="text-sm font-medium text-muted-foreground">
           {t("general.detector.title")}
         </div>

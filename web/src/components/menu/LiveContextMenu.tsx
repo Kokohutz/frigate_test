@@ -324,6 +324,18 @@ export default function LiveContextMenu({
                   </div>
                 </div>
               </ContextMenuItem>
+              <ContextMenuItem>
+                <div
+                  className="flex w-full cursor-pointer items-center justify-start gap-2"
+                  onClick={() => navigate(`/settings?page=camera`)}
+                >
+                  <div className="text-primary">
+                    {t("cameraManagement.cameraConfig.edit", {
+                      ns: "views/settings",
+                    })}
+                  </div>
+                </div>
+              </ContextMenuItem>
               <ContextMenuSeparator />
             </>
           )}
